@@ -1,0 +1,10 @@
+# dependencias y secretos
+node_modules/
+.env
+
+# archivos locales que no van al repositorio
+.claude/
+skills-lock.json
+JUNTAUCR - PRUEBA CORTA.pdf
+*.h2d
+prototipo/pantallas/

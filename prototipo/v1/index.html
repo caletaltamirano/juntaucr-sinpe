@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JUNTAUCR SINPE Prototipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F9; --surface:#FFFFFF; --ink:#0F1B2D; --muted:#5B6B82; --faint:#8A97AB; --line:#E2E7EF;
+  --nav:#0B2545; --nav-ink:#B9C7DC; --brand:#0B5CAD; --brand-soft:#E6F0FB; --accent:#00A3E0;
+  --ok:#0E7A55; --ok-bg:#E2F4EC; --warn:#9A5B00; --warn-bg:#FFF2D9; --err:#B42318; --err-bg:#FDE8E6;
+  --neu:#475467; --neu-bg:#EEF1F5;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:#D5DBE5;font-size:14px;line-height:1.45}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;letter-spacing:-.2px}
+.muted{color:var(--muted)} .small{font-size:12px} .b{font-weight:600}
+
+/* lienzo */
+.canvas{padding:48px 40px;display:flex;flex-direction:column;gap:64px;align-items:center}
+.canvas-head{width:1440px}
+.canvas-head h1{font-size:28px;letter-spacing:-.4px}
+.canvas-head p{color:#475467;margin-top:6px}
+.label{width:1440px;font-weight:600;color:#344054;margin-bottom:12px;font-size:16px}
+.demo{background:var(--bg);min-height:100vh;display:flex;justify-content:center}
+
+/* frame */
+.frame{width:1440px;min-height:900px;background:var(--bg);display:flex;position:relative;overflow:hidden}
+.canvas .frame{box-shadow:0 10px 34px rgba(15,27,45,.14)}
+.side{width:248px;background:var(--nav);color:var(--nav-ink);padding:24px 16px;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:10px;padding:0 8px 26px;color:#fff;font-weight:700;font-size:17px}
+.logo small{display:block;font-weight:500;font-size:11px;color:var(--nav-ink);letter-spacing:.3px}
+.mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--brand));display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0}
+.nav{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:500}
+.nav:hover{background:rgba(255,255,255,.06)}
+.nav.on{background:rgba(255,255,255,.13);color:#fff}
+.nav svg{width:18px;height:18px}
+.side-foot{margin-top:auto;padding:12px;border-radius:8px;background:rgba(255,255,255,.06);font-size:12px;color:#DCE5F2}
+.side-foot span{opacity:.7}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:64px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 32px;gap:16px;flex-shrink:0}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:0 12px;height:38px;width:360px;color:var(--faint)}
+.search svg{width:16px;height:16px}
+.user{margin-left:auto;display:flex;align-items:center;gap:10px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:600;font-size:13px;flex-shrink:0}
+.avatar.lg{width:56px;height:56px;font-size:19px}
+.content{padding:28px 32px 40px;display:flex;flex-direction:column;gap:24px}
+
+.page-head{display:flex;align-items:flex-end;gap:16px}
+.page-head h2{font-size:24px;font-weight:700;letter-spacing:-.3px}
+.page-head p{color:var(--muted);margin-top:4px}
+.page-head .actions{margin-left:auto;display:flex;gap:10px}
+.crumb{color:var(--muted);font-size:13px;margin-bottom:6px}
+.crumb a{color:var(--brand);cursor:pointer;font-weight:500}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;min-height:60px}
+.card-h h3{font-size:16px;font-weight:600}
+.card-h .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card-b{padding:20px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 16px;border-radius:8px;font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn svg{width:16px;height:16px}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.dan{color:var(--err);border-color:#F1C4BE}
+.btn.sm{height:30px;padding:0 10px;font-size:13px}
+.btn.lg{height:46px;padding:0 22px;font-size:15px}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--brand);padding:0 6px}
+.btn.full{width:100%}
+
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:11px 20px;background:#F8FAFC;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:13px 20px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tr.link{cursor:pointer} tr.link:hover td{background:#FAFBFD}
+.r{text-align:right}
+
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.plain::before{display:none}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-err{background:var(--err-bg);color:var(--err)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-neu{background:var(--neu-bg);color:var(--neu)}
+.b-info{background:var(--brand-soft);color:var(--brand)}
+
+.grid{display:grid;gap:24px}
+.g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+.gm{grid-template-columns:1.55fr 1fr} .gm2{grid-template-columns:1fr 1.55fr}
+.stat{padding:20px}
+.stat .k{color:var(--muted);font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px}
+.stat .v{font-size:28px;font-weight:700;margin-top:8px;letter-spacing:-.5px}
+.stat .s{color:var(--muted);font-size:12px;margin-top:2px}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field>label{font-size:13px;font-weight:600;color:#344054}
+.input{min-height:42px;border:1px solid #CFD6E2;border-radius:8px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#fff}
+.input.ph{color:var(--faint)}
+.input.sel::after{content:'';margin-left:auto;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-2px) rotate(45deg);flex-shrink:0}
+.input.ok{border-color:var(--ok)} .input.bad{border-color:var(--err)}
+.input.focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.input .pre{color:var(--muted);font-weight:600}
+.input .end{margin-left:auto}
+.hint{font-size:12px;color:var(--muted)} .hint.ok{color:var(--ok)} .hint.bad{color:var(--err)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:18px 20px}
+.span2{grid-column:span 2}
+
+.alert{display:flex;gap:12px;padding:14px 16px;border-radius:10px;font-size:13px}
+.alert svg{width:18px;height:18px;flex-shrink:0;margin-top:1px}
+.a-info{background:var(--brand-soft);color:#0B3F78}
+.a-warn{background:var(--warn-bg);color:#6E4100}
+.a-err{background:var(--err-bg);color:#8A1C12}
+.a-ok{background:var(--ok-bg);color:#0A5A3F}
+
+.tabs{display:inline-flex;align-self:flex-start;background:#E6EAF1;border-radius:10px;padding:4px;gap:4px}
+.tab{padding:7px 16px;border-radius:7px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;gap:8px;align-items:center}
+.tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(15,27,45,.1)}
+.tab .n{font-size:12px;background:var(--neu-bg);color:var(--neu);border-radius:999px;padding:0 7px}
+
+.overlay{position:absolute;inset:0;background:rgba(11,22,40,.48);display:flex;align-items:center;justify-content:center;z-index:5}
+.modal{width:580px;background:#fff;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.28);overflow:hidden}
+.modal .card-h{padding:20px 24px} .modal .card-b{padding:24px}
+.modal-f{padding:16px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;background:#FAFBFD}
+
+.row{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .grow{flex:1;min-width:0}
+.ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);flex-shrink:0}
+.ic svg{width:18px;height:18px}
+.ic.ok{background:var(--ok-bg);color:var(--ok)} .ic.err{background:var(--err-bg);color:var(--err)} .ic.neu{background:var(--neu-bg);color:var(--neu)}
+
+.rule{display:flex;gap:10px;align-items:flex-start;padding:9px 0;font-size:13px}
+.rule .ck{width:20px;height:20px;border-radius:50%;background:var(--ok-bg);color:var(--ok);display:grid;place-items:center;flex-shrink:0}
+.rule .ck.x{background:var(--err-bg);color:var(--err)}
+.rule .ck svg{width:12px;height:12px}
+
+.pick{border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:center;cursor:pointer}
+.pick.on{border-color:var(--brand);background:#F5F9FE;box-shadow:0 0 0 1px var(--brand)}
+.pick.off{background:#FAFBFC;cursor:not-allowed}
+.pick.off .grow{opacity:.6}
+.radio{width:18px;height:18px;border-radius:50%;border:2px solid #B7C1D1;flex-shrink:0}
+.pick.on .radio{border:5px solid var(--brand)}
+.stack{display:flex;flex-direction:column;gap:10px}
+
+.kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv span:first-child{color:var(--muted)}
+.big-ic{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;margin:0 auto 18px}
+.big-ic svg{width:36px;height:36px}
+.result{width:600px;margin:8px auto 0;text-align:center}
+.result h2{font-size:26px;letter-spacing:-.3px}
+.result .card{text-align:left;margin-top:24px}
+
+.tl{position:relative;padding-left:4px}
+.tl-i{display:flex;gap:16px;position:relative;padding-bottom:22px}
+.tl-i:not(:last-child)::before{content:'';position:absolute;left:15px;top:34px;bottom:4px;width:2px;background:var(--line)}
+.tl-d{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+.tl-d svg{width:15px;height:15px}
+.dest{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--ok-bg);color:#0A5A3F;font-size:13px}
+.amount{font-size:34px;font-weight:700;letter-spacing:-.6px}
+.pos{color:var(--ok);font-weight:600} .neg{color:var(--ink);font-weight:600}
+.arrow{display:grid;place-items:center;color:var(--faint)} .arrow svg{width:22px;height:22px}
+
+/* login */
+.login{display:flex;width:100%}
+.login-art{width:640px;background:linear-gradient(160deg,#0B2545 0%,#0B5CAD 70%,#00A3E0 130%);color:#fff;padding:56px;display:flex;flex-direction:column}
+.login-art h1{font-size:40px;line-height:1.15;letter-spacing:-.8px;margin-top:auto}
+.login-art p{color:#C9D9F0;margin-top:14px;font-size:16px;max-width:440px}
+.login-form{flex:1;display:grid;place-items:center}
+.login-box{width:400px;display:flex;flex-direction:column;gap:18px}
+.login-box h2{font-size:26px;letter-spacing:-.4px}
+
+.demo-bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#0F1B2D;color:#fff;border-radius:999px;padding:8px 10px 8px 16px;display:flex;gap:12px;align-items:center;font-size:13px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.demo-bar a{color:#fff;background:rgba(255,255,255,.12);padding:6px 12px;border-radius:999px;text-decoration:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const P = {
+  home:'M3 11l9-8 9 8M5 10v10h14V10',
+  users:'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  card:'M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM2 10h20M6 15h4',
+  phone:'M8 2h8a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2',
+  link:'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1',
+  swap:'M4 7h15l-4-4M20 17H5l4 4',
+  list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  db:'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  search:'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M21 21l-5-5',
+  plus:'M12 5v14M5 12h14',
+  check:'M5 12l5 5L20 7',
+  x:'M6 6l12 12M18 6L6 18',
+  right:'M5 12h14M13 6l6 6-6 6',
+  down:'M12 5v14M6 13l6 6 6-6',
+  up:'M12 19V5M6 11l6-6 6 6',
+  alert:'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0',
+  info:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 16v-4M12 8h.01',
+  clock:'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18',
+  unlink:'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7M3 3l18 18',
+  bank:'M3 21h18M5 21V10M19 21V10M9 21V10M15 21V10M2 10l10-6 10 6z',
+  filter:'M3 5h18l-7 8v6l-4 2v-8z',
+  dl:'M12 3v12M7 10l5 5 5-5M4 21h16',
+  lock:'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4',
+  chev:'M9 6l6 6-6 6'
+};
+const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${P[n]}"/></svg>`;
+const ib = x => `<span class="mono">${x}</span>`;
+const sh = x => x.slice(0,4) + '…' + x.slice(-4);
+const badge = (t, k, plain) => `<span class="badge b-${k}${plain ? ' plain' : ''}">${t}</span>`;
+const estado = s => badge(s, {ACTIVO:'ok', ACTIVA:'ok', INACTIVO:'neu', INACTIVA:'neu', BLOQUEADA:'err'}[s]);
+const mon = m => badge(m, m === 'CRC' ? 'info' : 'warn', true);
+const afil = a => a ? badge('Afiliado', 'ok') : badge('No afiliado', 'neu');
+const ini = n => n.split(' ').slice(0,2).map(w => w[0]).join('');
+
+/* ---------- Datos ficticios ---------- */
+const C = [
+  {id:'1-1234-0567', n:'Ana Rodríguez Mora',     e:'ana.rodriguez@correo.cr', f:'12/03/2026', cu:3, t:3, s:'ACTIVO'},
+  {id:'2-0456-0789', n:'Carlos Jiménez Solís',   e:'cjimenez@correo.cr',      f:'20/03/2026', cu:1, t:1, s:'ACTIVO'},
+  {id:'1-0987-0654', n:'María Fernández Vargas', e:'maria.fv@correo.cr',      f:'02/04/2026', cu:1, t:1, s:'ACTIVO'},
+  {id:'3-0321-0111', n:'José Ramírez Castro',    e:'jramirez@correo.cr',      f:'18/05/2026', cu:1, t:1, s:'INACTIVO'},
+  {id:'1-1111-0222', n:'Laura Chaves Quesada',   e:'laura.chaves@correo.cr',  f:'07/07/2026', cu:1, t:1, s:'ACTIVO'}
+];
+const A = [
+  {i:'CR21015200001234567890', c:'Ana Rodríguez Mora',     en:'JUNTAUCR',           m:'CRC', s:'₡850.000,00',   f:'15/03/2026', st:'ACTIVA',    t:2},
+  {i:'CR54015200004445556667', c:'Ana Rodríguez Mora',     en:'JUNTAUCR',           m:'CRC', s:'₡120.000,00',   f:'01/05/2026', st:'ACTIVA',    t:0},
+  {i:'CR47015200009876543210', c:'Ana Rodríguez Mora',     en:'JUNTAUCR',           m:'USD', s:'$1.250,00',     f:'15/03/2026', st:'ACTIVA',    t:0},
+  {i:'CR63081400005551112223', c:'Carlos Jiménez Solís',   en:'Banco Volcán',       m:'CRC', s:'₡420.500,00',   f:'21/03/2026', st:'ACTIVA',    t:1},
+  {i:'CR88090100007778889990', c:'María Fernández Vargas', en:'Cooperativa Arenal', m:'CRC', s:'₡1.200.000,00', f:'03/04/2026', st:'ACTIVA',    t:1},
+  {i:'CR12015200003334445556', c:'José Ramírez Castro',    en:'JUNTAUCR',           m:'CRC', s:'₡15.000,00',    f:'19/05/2026', st:'INACTIVA',  t:0},
+  {i:'CR35081400002223334445', c:'Laura Chaves Quesada',   en:'Banco Volcán',       m:'CRC', s:'₡98.300,00',    f:'08/07/2026', st:'BLOQUEADA', t:0}
+];
+const T = [
+  {n:'8888-1111', c:'Ana Rodríguez Mora',     a:'CR21015200001234567890', d:'20/07/2026'},
+  {n:'8888-2222', c:'Ana Rodríguez Mora',     a:'CR21015200001234567890', d:'16/03/2026'},
+  {n:'8777-6666', c:'Ana Rodríguez Mora',     a:null},
+  {n:'8888-3333', c:'Carlos Jiménez Solís',   a:'CR63081400005551112223', d:'22/03/2026'},
+  {n:'8333-4444', c:'María Fernández Vargas', a:'CR88090100007778889990', d:'05/04/2026'},
+  {n:'6000-1234', c:'José Ramírez Castro',    a:null},
+  {n:'7111-2222', c:'Laura Chaves Quesada',   a:null}
+];
+const TR = [
+  {id:'TRF-000128', f:'31/10/2026 10:42', k:'SINPE', o:'8888-1111', d:'8888-3333', m:'₡25.000,00'},
+  {id:'TRF-000127', f:'31/10/2026 09:15', k:'IBAN',  o:'CR88…9990', d:'CR21…7890', m:'₡150.000,00'},
+  {id:'TRF-000126', f:'30/10/2026 17:03', k:'SINPE', o:'8333-4444', d:'8888-2222', m:'₡60.000,00'},
+  {id:'TRF-000125', f:'30/10/2026 12:20', k:'SINPE', o:'8888-3333', d:'8333-4444', m:'₡12.500,00'},
+  {id:'TRF-000124', f:'29/10/2026 08:47', k:'IBAN',  o:'CR21…7890', d:'CR63…2223', m:'₡107.500,00'}
+];
+
+/* ---------- Layout ---------- */
+const NAV = [
+  ['dashboard','Inicio','home'], ['clientes','Clientes','users'], ['cuentas','Cuentas IBAN','card'],
+  ['telefonos','Teléfonos','phone'], ['sinpe','SINPE Móvil','link'], ['transferir-tel','Transferir','swap'],
+  ['movimientos','Movimientos','list'], ['catalogos','Catálogos','db']
+];
+const shell = (active, body, overlay = '') => `
+  <div class="side">
+    <div class="logo"><div class="mark">J</div><div>JUNTAUCR<small>SINPE Móvil</small></div></div>
+    ${NAV.map(([id, t, i]) => `<div class="nav${id === active ? ' on' : ''}" data-go="${id}">${ic(i)}${t}</div>`).join('')}
+    <div class="side-foot">Entorno de simulación<br><span>Datos ficticios · sin conexión al BCCR</span></div>
+  </div>
+  <div class="main">
+    <div class="top">
+      <div class="search">${ic('search')}Buscar cliente, IBAN o teléfono…</div>
+      <div class="user"><div style="text-align:right"><div class="b">Admin Operaciones</div><div class="small muted">admin@juntaucr.cr</div></div><div class="avatar">AO</div></div>
+    </div>
+    <div class="content">${body}</div>
+  </div>${overlay}`;
+const head = (t, p, actions = '', crumb = '') => `
+  <div class="page-head"><div>${crumb ? `<div class="crumb">${crumb}</div>` : ''}<h2>${t}</h2>${p ? `<p>${p}</p>` : ''}</div>
+  ${actions ? `<div class="actions">${actions}</div>` : ''}</div>`;
+const field = (label, value, o = {}) => `
+  <div class="field${o.span ? ' span2' : ''}"><label>${label}</label>
+  <div class="input${o.sel ? ' sel' : ''}${o.ph ? ' ph' : ''}${o.st ? ' ' + o.st : ''}">${value}</div>
+  ${o.hint ? `<div class="hint${o.hk ? ' ' + o.hk : ''}">${o.hint}</div>` : ''}</div>`;
+const rule = (t, bad) => `<div class="rule"><div class="ck${bad ? ' x' : ''}">${ic(bad ? 'x' : 'check')}</div><div>${t}</div></div>`;
+const modal = (title, body, foot) => `<div class="overlay"><div class="modal">
+  <div class="card-h"><h3>${title}</h3><div class="actions"><span class="btn ghost" style="color:var(--muted)">${ic('x')}</span></div></div>
+  <div class="card-b">${body}</div><div class="modal-f">${foot}</div></div></div>`;
+
+/* ---------- Cuerpos reutilizables ---------- */
+const clientesBody = () => head('Clientes', 'Registro y consulta de clientes de la entidad.',
+  `<span class="btn" >${ic('dl')}Exportar</span><span class="btn pri" data-go="cliente-nuevo">${ic('plus')}Nuevo cliente</span>`) + `
+  <div class="card">
+    <div class="card-h"><div class="search" style="width:320px">${ic('search')}Buscar por identificación o nombre</div>
+      <div class="actions"><div class="input sel" style="min-width:170px;min-height:38px">Estado: Todos</div></div></div>
+    <table><tr><th>Identificación</th><th>Nombre completo</th><th>Correo electrónico</th><th>Registro</th><th class="r">Cuentas</th><th class="r">Teléfonos</th><th>Estado</th><th></th></tr>
+    ${C.map(c => `<tr class="link" data-go="cliente-detalle"><td>${ib(c.id)}</td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="avatar">${ini(c.n)}</div><span class="b">${c.n}</span></div></td>
+      <td class="muted">${c.e}</td><td>${c.f}</td><td class="r">${c.cu}</td><td class="r">${c.t}</td><td>${estado(c.s)}</td>
+      <td class="r muted" style="width:40px">${ic('chev').replace('<svg', '<svg width="16" height="16"')}</td></tr>`).join('')}
+    </table>
+  </div>`;
+
+const telefonosBody = () => head('Teléfonos', 'Números celulares registrados. Registrar un número no lo afilia a SINPE Móvil.',
+  `<span class="btn pri" data-go="telefono-nuevo">${ic('plus')}Registrar teléfono</span>`) + `
+  <div class="card">
+    <div class="card-h"><div class="tabs"><div class="tab on">Todos <span class="n">7</span></div><div class="tab">Afiliados <span class="n">4</span></div><div class="tab">No afiliados <span class="n">3</span></div></div>
+      <div class="actions"><div class="search" style="width:280px">${ic('search')}Buscar número o titular</div></div></div>
+    <table><tr><th>Número</th><th>Titular</th><th>SINPE Móvil</th><th>Cuenta afiliada</th><th>Afiliado desde</th><th class="r">Acciones</th></tr>
+    ${T.map(t => `<tr><td class="b">${ib(t.n)}</td><td>${t.c}</td><td>${afil(t.a)}</td>
+      <td>${t.a ? ib(t.a) : '<span class="muted">—</span>'}</td><td>${t.d || '<span class="muted">—</span>'}</td>
+      <td class="r"><div style="display:inline-flex;gap:6px">${t.a
+        ? `<span class="btn sm" data-go="sinpe-trasladar">Trasladar</span><span class="btn sm" data-go="sinpe-historial">${ic('clock')}Historial</span>`
+        : `<span class="btn sm pri" data-go="sinpe">${ic('link')}Afiliar</span><span class="btn sm" data-go="sinpe-historial">${ic('clock')}Historial</span>`}</div></td></tr>`).join('')}
+    </table>
+  </div>`;
+
+const sinpeBody = () => head('SINPE Móvil', 'Afiliación, desafiliación y traslado de números a cuentas IBAN.') + `
+  <div class="grid gm">
+    <div class="card">
+      <div class="card-h"><div class="ic">${ic('link')}</div><h3>Afiliar teléfono</h3></div>
+      <div class="card-b stack" style="gap:18px">
+        ${field('Teléfono', `<span class="mono b">8777-6666</span><span class="muted">· Ana Rodríguez Mora</span><span class="end">${badge('No afiliado', 'neu')}</span>`, {sel:1})}
+        <div class="field"><label>Cuenta destino <span class="muted" style="font-weight:400">— solo cuentas del mismo titular</span></label>
+          <div class="stack">
+            <div class="pick on"><div class="radio"></div><div class="grow"><div class="b">${ib('CR21015200001234567890')}</div><div class="small muted">JUNTAUCR · Saldo ₡850.000,00</div></div>${mon('CRC')}${estado('ACTIVA')}</div>
+            <div class="pick"><div class="radio"></div><div class="grow"><div class="b">${ib('CR54015200004445556667')}</div><div class="small muted">JUNTAUCR · Saldo ₡120.000,00</div></div>${mon('CRC')}${estado('ACTIVA')}</div>
+            <div class="pick off"><div class="radio"></div><div class="grow"><div class="b">${ib('CR47015200009876543210')}</div><div class="small" style="color:var(--err)">No elegible: la cuenta está en USD</div></div>${mon('USD')}${estado('ACTIVA')}</div>
+          </div></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px"><span class="btn">Cancelar</span><span class="btn pri" data-go="telefonos">${ic('link')}Afiliar teléfono</span></div>
+      </div>
+    </div>
+    <div class="stack" style="gap:24px">
+      <div class="card"><div class="card-h"><h3>Requisitos de afiliación</h3></div><div class="card-b" style="padding-top:8px;padding-bottom:8px">
+        ${rule('El teléfono está registrado y no tiene afiliación vigente')}
+        ${rule('La cuenta pertenece al mismo titular del teléfono')}
+        ${rule('La cuenta está en estado <b>ACTIVA</b>')}
+        ${rule('La cuenta está denominada en colones (<b>CRC</b>)')}
+      </div></div>
+      <div class="alert a-info">${ic('info')}<div>Cada afiliación y desafiliación queda registrada automáticamente en el historial del teléfono.</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>Afiliaciones vigentes</h3><div class="actions"><span class="muted small">4 teléfonos afiliados</span></div></div>
+    <table><tr><th>Teléfono</th><th>Titular</th><th>Cuenta IBAN</th><th>Entidad</th><th>Desde</th><th class="r">Acciones</th></tr>
+    ${T.filter(t => t.a).map(t => `<tr><td class="b">${ib(t.n)}</td><td>${t.c}</td><td>${ib(t.a)}</td><td>${A.find(a => a.i === t.a).en}</td><td>${t.d}</td>
+      <td class="r"><div style="display:inline-flex;gap:6px"><span class="btn sm" data-go="sinpe-trasladar">${ic('swap')}Trasladar</span><span class="btn sm dan" data-go="sinpe-desafiliar">${ic('unlink')}Desafiliar</span><span class="btn sm" data-go="sinpe-historial">${ic('clock')}</span></div></td></tr>`).join('')}
+    </table>
+  </div>`;
+
+const transferTabs = on => `<div class="tabs">
+  <div class="tab${on === 'tel' ? ' on' : ''}" data-go="transferir-tel">${ic('phone').replace('<svg', '<svg width="16" height="16"')}Por teléfono</div>
+  <div class="tab${on === 'iban' ? ' on' : ''}" data-go="transferir-iban">${ic('card').replace('<svg', '<svg width="16" height="16"')}Por IBAN</div></div>`;
+
+const transferRules = (iban) => `<div class="stack" style="gap:24px">
+  <div class="card"><div class="card-h"><h3>Validaciones</h3></div><div class="card-b" style="padding-top:8px;padding-bottom:8px">
+    ${iban ? rule('Ambas cuentas existen y están <b>ACTIVAS</b>') : rule('Ambos teléfonos tienen afiliación vigente')}
+    ${iban ? rule('Ambas cuentas usan la <b>misma moneda</b>') : rule('Las cuentas afiliadas están activas y en <b>CRC</b>')}
+    ${iban ? rule('La cuenta origen es distinta de la destino') : rule('Los teléfonos no están afiliados a la <b>misma cuenta</b>')}
+    ${rule('Monto mayor que cero')}
+    ${rule('Saldo suficiente en la cuenta origen')}
+  </div></div>
+  <div class="alert a-info">${ic('lock')}<div>La operación se ejecuta en una sola transacción: débito, crédito y registro. Si algo falla, se revierten todos los cambios.</div></div>
+</div>`;
+
+/* ---------- Pantallas ---------- */
+const SCREENS = [
+{id:'login', name:'Inicio de sesión', html:() => `<div class="login">
+  <div class="login-art"><div class="logo" style="padding:0"><div class="mark">J</div><div>JUNTAUCR<small>SINPE Móvil</small></div></div>
+    <h1>Transferencias SINPE Móvil y por IBAN, en un solo lugar.</h1>
+    <p>Sistema de simulación para la administración de clientes, cuentas, teléfonos y afiliaciones. Todos los datos son ficticios.</p>
+    <div style="margin-top:48px;display:flex;gap:28px;color:#C9D9F0;font-size:13px"><span>${ic('lock').replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px;margin-right:6px"')}Operaciones transaccionales</span><span>Historial auditable</span></div>
+  </div>
+  <div class="login-form"><div class="login-box">
+    <div><h2>Iniciar sesión</h2><p class="muted" style="margin-top:6px">Ingresa con tu usuario de operaciones.</p></div>
+    ${field('Usuario', 'admin@juntaucr.cr', {st:'focus'})}
+    ${field('Contraseña', '••••••••••')}
+    <span class="btn pri lg full" data-go="dashboard">Ingresar</span>
+    <p class="small muted" style="text-align:center">Entorno académico · No se conecta con el Banco Central de Costa Rica</p>
+  </div></div></div>`},
+
+{id:'dashboard', name:'Inicio (dashboard)', html:() => shell('dashboard', head('Buenos días, Admin', 'Resumen de la actividad del sistema al 31/10/2026.') + `
+  <div class="grid g4">
+    <div class="card stat"><div class="k"><div class="ic">${ic('users')}</div>Clientes</div><div class="v">5</div><div class="s">4 activos · 1 inactivo</div></div>
+    <div class="card stat"><div class="k"><div class="ic">${ic('card')}</div>Cuentas IBAN</div><div class="v">7</div><div class="s">5 activas · 1 inactiva · 1 bloqueada</div></div>
+    <div class="card stat"><div class="k"><div class="ic">${ic('phone')}</div>Teléfonos afiliados</div><div class="v">4 <span class="muted" style="font-size:16px;font-weight:500">/ 7</span></div><div class="s">3 registrados sin afiliar</div></div>
+    <div class="card stat"><div class="k"><div class="ic ok">${ic('swap')}</div>Transferido hoy</div><div class="v">₡175.000</div><div class="s">2 transferencias</div></div>
+  </div>
+  <div class="grid gm">
+    <div class="card"><div class="card-h"><h3>Últimas transferencias</h3><div class="actions"><span class="btn ghost" data-go="movimientos">Ver movimientos ${ic('right')}</span></div></div>
+      <table><tr><th>Comprobante</th><th>Fecha</th><th>Canal</th><th>Origen → Destino</th><th class="r">Monto</th></tr>
+      ${TR.map(t => `<tr><td>${ib(t.id)}</td><td class="muted">${t.f}</td><td>${badge(t.k === 'SINPE' ? 'SINPE Móvil' : 'IBAN', t.k === 'SINPE' ? 'info' : 'neu', true)}</td>
+        <td>${ib(t.o)} <span class="muted">→</span> ${ib(t.d)}</td><td class="r b">${t.m}</td></tr>`).join('')}
+      </table></div>
+    <div class="card"><div class="card-h"><h3>Acciones rápidas</h3></div><div class="card-b stack">
+      <div class="pick" data-go="transferir-tel"><div class="ic">${ic('phone')}</div><div class="grow"><div class="b">Transferir por teléfono</div><div class="small muted">SINPE Móvil entre números afiliados</div></div>${ic('chev').replace('<svg', '<svg width="16" height="16"')}</div>
+      <div class="pick" data-go="transferir-iban"><div class="ic">${ic('card')}</div><div class="grow"><div class="b">Transferir por IBAN</div><div class="small muted">Entre cuentas de la misma moneda</div></div>${ic('chev').replace('<svg', '<svg width="16" height="16"')}</div>
+      <div class="pick" data-go="sinpe"><div class="ic">${ic('link')}</div><div class="grow"><div class="b">Afiliar teléfono</div><div class="small muted">Asociar un número a una cuenta en CRC</div></div>${ic('chev').replace('<svg', '<svg width="16" height="16"')}</div>
+      <div class="pick" data-go="cliente-nuevo"><div class="ic">${ic('users')}</div><div class="grow"><div class="b">Registrar cliente</div><div class="small muted">Nuevo titular de cuentas y teléfonos</div></div>${ic('chev').replace('<svg', '<svg width="16" height="16"')}</div>
+    </div></div>
+  </div>`)},
+
+{id:'clientes', name:'Clientes · listado', html:() => shell('clientes', clientesBody())},
+
+{id:'cliente-nuevo', name:'Clientes · nuevo cliente (modal)', html:() => shell('clientes', clientesBody(), modal('Nuevo cliente', `
+  <div class="form">
+    ${field('Identificación', '<span class="mono">1-1456-0789</span>', {hint:'Única por cliente', st:'focus'})}
+    ${field('Estado', 'ACTIVO', {sel:1})}
+    ${field('Nombre completo', 'Daniela Soto Araya', {span:1})}
+    ${field('Correo electrónico', 'daniela.soto@correo.cr', {span:1})}
+    <div class="alert a-info span2">${ic('info')}<div>La fecha de registro se asigna automáticamente. Las cuentas y teléfonos se agregan desde el detalle del cliente.</div></div>
+  </div>`, `<span class="btn" data-go="clientes">Cancelar</span><span class="btn pri" data-go="cliente-detalle">Guardar cliente</span>`))},
+
+{id:'cliente-detalle', name:'Clientes · detalle (cuentas y teléfonos)', html:() => shell('clientes', head('Ana Rodríguez Mora', '', `<span class="btn">Editar</span><span class="btn pri" data-go="cuenta-nueva">${ic('plus')}Nueva cuenta</span>`, '<a data-go="clientes">Clientes</a> / Detalle') + `
+  <div class="card"><div class="card-b" style="display:flex;gap:40px;align-items:center">
+    <div style="display:flex;gap:14px;align-items:center"><div class="avatar lg">AR</div><div><div class="b" style="font-size:17px">Ana Rodríguez Mora</div><div class="muted">${ib('1-1234-0567')}</div></div></div>
+    <div><div class="small muted">Correo</div><div class="b">ana.rodriguez@correo.cr</div></div>
+    <div><div class="small muted">Fecha de registro</div><div class="b">12/03/2026</div></div>
+    <div><div class="small muted">Estado</div>${estado('ACTIVO')}</div>
+  </div></div>
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><h3>Cuentas IBAN</h3><span class="badge b-neu plain">3</span><div class="actions"><span class="btn sm" data-go="cuenta-nueva">${ic('plus')}Agregar</span></div></div>
+      ${A.filter(a => a.c === 'Ana Rodríguez Mora').map(a => `<div class="row" data-go="cuenta-detalle" style="cursor:pointer"><div class="ic">${ic('card')}</div>
+        <div class="grow"><div class="b">${ib(a.i)}</div><div class="small muted">${a.en} · ${a.t} teléfono(s) afiliado(s)</div></div>
+        <div class="r"><div class="b">${a.s}</div><div style="display:flex;gap:6px;margin-top:4px;justify-content:flex-end">${mon(a.m)}${estado(a.st)}</div></div></div>`).join('')}
+    </div>
+    <div class="card"><div class="card-h"><h3>Teléfonos</h3><span class="badge b-neu plain">3</span><div class="actions"><span class="btn sm" data-go="telefono-nuevo">${ic('plus')}Registrar</span></div></div>
+      ${T.filter(t => t.c === 'Ana Rodríguez Mora').map(t => `<div class="row"><div class="ic ${t.a ? 'ok' : 'neu'}">${ic('phone')}</div>
+        <div class="grow"><div class="b">${ib(t.n)}</div><div class="small muted">${t.a ? 'Afiliado a ' + ib(sh(t.a)) + ' desde ' + t.d : 'Registrado, sin afiliación SINPE'}</div></div>
+        ${afil(t.a)}${t.a ? `<span class="btn sm" data-go="sinpe-historial">${ic('clock')}</span>` : `<span class="btn sm pri" data-go="sinpe">Afiliar</span>`}</div>`).join('')}
+    </div>
+  </div>`)},
+
+{id:'cuentas', name:'Cuentas IBAN · listado', html:() => shell('cuentas', head('Cuentas IBAN', 'Cuentas registradas por titular, entidad y moneda.', `<span class="btn pri" data-go="cuenta-nueva">${ic('plus')}Nueva cuenta</span>`) + `
+  <div class="card">
+    <div class="card-h"><div class="search" style="width:300px">${ic('search')}Buscar IBAN o titular</div>
+      <div class="actions"><div class="input sel" style="min-height:38px;min-width:150px">Moneda: Todas</div><div class="input sel" style="min-height:38px;min-width:150px">Estado: Todos</div><div class="input sel" style="min-height:38px;min-width:170px">Entidad: Todas</div></div></div>
+    <table><tr><th>IBAN</th><th>Titular</th><th>Entidad</th><th>Moneda</th><th class="r">Saldo</th><th>Apertura</th><th class="r">Tel. afiliados</th><th>Estado</th></tr>
+    ${A.map(a => `<tr class="link" data-go="cuenta-detalle"><td class="b">${ib(a.i)}</td><td>${a.c}</td><td>${a.en}</td><td>${mon(a.m)}</td><td class="r b">${a.s}</td><td>${a.f}</td><td class="r">${a.t}</td><td>${estado(a.st)}</td></tr>`).join('')}
+    </table>
+  </div>`)},
+
+{id:'cuenta-nueva', name:'Cuentas IBAN · nueva cuenta', html:() => shell('cuentas', head('Nueva cuenta IBAN', 'Registra una cuenta para un cliente existente.', '', '<a data-go="cuentas">Cuentas IBAN</a> / Nueva') + `
+  <div class="grid gm">
+    <div class="card"><div class="card-h"><h3>Datos de la cuenta</h3></div><div class="card-b"><div class="form">
+      ${field('Titular', '<span class="mono">1-1234-0567</span> · Ana Rodríguez Mora', {sel:1, span:1})}
+      ${field('Entidad financiera', 'JUNTAUCR', {sel:1})}
+      ${field('Moneda', 'CRC — Colón costarricense', {sel:1})}
+      ${field('IBAN', '<span class="mono">CR54015200004445556667</span><span class="end small" style="color:var(--ok)">22/22</span>', {span:1, st:'ok', hint:'Formato válido: “CR” + 20 dígitos. El IBAN no está registrado.', hk:'ok'})}
+      ${field('Saldo inicial', '<span class="pre">₡</span>120.000,00', {hint:'No se permiten saldos negativos'})}
+      ${field('Fecha de apertura', '01/05/2026', {sel:1})}
+      ${field('Estado', 'ACTIVA', {sel:1})}
+      <div></div>
+      <div class="span2" style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px"><span class="btn" data-go="cuentas">Cancelar</span><span class="btn pri" data-go="cuenta-detalle">Registrar cuenta</span></div>
+    </div></div></div>
+    <div class="stack" style="gap:24px">
+      <div class="card"><div class="card-h"><h3>Validaciones</h3></div><div class="card-b" style="padding-top:8px;padding-bottom:8px">
+        ${rule('El titular existe y está activo')}${rule('La entidad financiera existe en el catálogo')}${rule('La moneda existe en el catálogo (CRC / USD)')}
+        ${rule('IBAN único con exactamente 22 caracteres')}${rule('Saldo inicial mayor o igual a cero')}
+      </div></div>
+      <div class="alert a-warn">${ic('alert')}<div>Solo las cuentas <b>ACTIVAS</b> en <b>CRC</b> pueden recibir afiliaciones SINPE Móvil.</div></div>
+    </div>
+  </div>`)},
+
+{id:'cuenta-detalle', name:'Cuentas IBAN · detalle (teléfonos asociados)', html:() => shell('cuentas', head(ib('CR21015200001234567890').replace('mono', 'mono" style="font-size:22px'), '', `<span class="btn">Cambiar estado</span><span class="btn pri" data-go="transferir-iban">${ic('swap')}Transferir</span>`, '<a data-go="cuentas">Cuentas IBAN</a> / Detalle') + `
+  <div class="grid g4">
+    <div class="card stat"><div class="k">Saldo disponible</div><div class="v">₡850.000,00</div><div class="s">${mon('CRC')}</div></div>
+    <div class="card stat"><div class="k">Titular</div><div class="v" style="font-size:18px">Ana Rodríguez Mora</div><div class="s">${ib('1-1234-0567')}</div></div>
+    <div class="card stat"><div class="k">Entidad</div><div class="v" style="font-size:18px">JUNTAUCR</div><div class="s">Apertura 15/03/2026</div></div>
+    <div class="card stat"><div class="k">Estado</div><div style="margin-top:12px">${estado('ACTIVA')}</div><div class="s" style="margin-top:8px">Habilitada para SINPE Móvil</div></div>
+  </div>
+  <div class="grid gm2">
+    <div class="card"><div class="card-h"><h3>Teléfonos afiliados</h3><span class="badge b-neu plain">2</span><div class="actions"><span class="btn sm" data-go="sinpe">${ic('plus')}Afiliar</span></div></div>
+      ${T.filter(t => t.a === 'CR21015200001234567890').map(t => `<div class="row"><div class="ic ok">${ic('phone')}</div><div class="grow"><div class="b">${ib(t.n)}</div><div class="small muted">Desde ${t.d}</div></div>
+        <span class="btn sm" data-go="sinpe-trasladar">Trasladar</span><span class="btn sm dan" data-go="sinpe-desafiliar">Desafiliar</span></div>`).join('')}
+      <div class="row"><div class="alert a-info" style="width:100%">${ic('info')}<div>No se permiten transferencias entre 8888-1111 y 8888-2222 porque comparten esta cuenta.</div></div></div>
+    </div>
+    <div class="card"><div class="card-h"><h3>Movimientos recientes</h3><div class="actions"><span class="btn ghost" data-go="movimientos">Ver todos ${ic('right')}</span></div></div>
+      <table><tr><th>Fecha</th><th>Tipo</th><th>Contraparte</th><th class="r">Monto</th></tr>
+        <tr><td class="muted">31/10/2026 10:42</td><td>${badge('Enviado', 'neu', true)}</td><td>${ib('8888-3333')} · Carlos Jiménez</td><td class="r neg">−₡25.000,00</td></tr>
+        <tr><td class="muted">31/10/2026 09:15</td><td>${badge('Recibido', 'ok', true)}</td><td>${ib('CR88…9990')} · María Fernández</td><td class="r pos">+₡150.000,00</td></tr>
+        <tr><td class="muted">30/10/2026 17:03</td><td>${badge('Recibido', 'ok', true)}</td><td>${ib('8333-4444')} · María Fernández</td><td class="r pos">+₡60.000,00</td></tr>
+        <tr><td class="muted">29/10/2026 08:47</td><td>${badge('Enviado', 'neu', true)}</td><td>${ib('CR63…2223')} · Carlos Jiménez</td><td class="r neg">−₡107.500,00</td></tr>
+      </table></div>
+  </div>`)},
+
+{id:'telefonos', name:'Teléfonos · listado (afiliados / no afiliados)', html:() => shell('telefonos', telefonosBody())},
+
+{id:'telefono-nuevo', name:'Teléfonos · registrar (modal)', html:() => shell('telefonos', telefonosBody(), modal('Registrar teléfono', `
+  <div class="stack" style="gap:18px">
+    ${field('Número celular', '<span class="mono b" style="font-size:15px">8777 6666</span><span class="end small" style="color:var(--ok)">8/8 dígitos</span>', {st:'ok', hint:'Debe tener exactamente 8 dígitos y no estar registrado.', hk:'ok'})}
+    ${field('Titular', '<span class="mono">1-1234-0567</span> · Ana Rodríguez Mora', {sel:1})}
+    <div class="alert a-info">${ic('info')}<div>Registrar el teléfono <b>no</b> lo afilia a SINPE Móvil. La afiliación se hace después desde el módulo SINPE Móvil.</div></div>
+  </div>`, `<span class="btn" data-go="telefonos">Cancelar</span><span class="btn pri" data-go="telefonos">Registrar teléfono</span>`))},
+
+{id:'sinpe', name:'SINPE Móvil · afiliar y afiliaciones vigentes', html:() => shell('sinpe', sinpeBody())},
+
+{id:'sinpe-trasladar', name:'SINPE Móvil · trasladar a otra cuenta (modal)', html:() => shell('sinpe', sinpeBody(), modal('Trasladar afiliación', `
+  <div class="stack" style="gap:18px">
+    <div style="display:flex;align-items:center;gap:12px"><div class="ic ok">${ic('phone')}</div><div><div class="b">${ib('8888-2222')}</div><div class="small muted">Ana Rodríguez Mora</div></div></div>
+    <div style="display:grid;grid-template-columns:1fr 32px 1fr;gap:8px;align-items:end">
+      ${field('Cuenta actual', ib('CR21015200001234567890'))}
+      <div class="arrow" style="height:42px">${ic('right')}</div>
+      ${field('Nueva cuenta', ib('CR54015200004445556667'), {sel:1, st:'focus'})}
+    </div>
+    <div class="alert a-info">${ic('lock')}<div>El traslado se ejecuta en una sola transacción: se desafilia la cuenta actual y se afilia la nueva. Si el segundo paso falla, se recupera la afiliación original.</div></div>
+  </div>`, `<span class="btn" data-go="sinpe">Cancelar</span><span class="btn pri" data-go="sinpe-historial">Confirmar traslado</span>`))},
+
+{id:'sinpe-desafiliar', name:'SINPE Móvil · desafiliar (confirmación)', html:() => shell('sinpe', sinpeBody(), modal('Desafiliar teléfono', `
+  <div class="stack" style="gap:16px">
+    <p>¿Deseas desafiliar el número <b class="mono">8888-2222</b> de la cuenta <b class="mono">CR21015200001234567890</b>?</p>
+    <div class="alert a-warn">${ic('alert')}<div>El número dejará de recibir transferencias SINPE Móvil. Seguirá registrado a nombre de Ana Rodríguez Mora y su historial se conserva.</div></div>
+  </div>`, `<span class="btn" data-go="sinpe">Cancelar</span><span class="btn pri" style="background:var(--err);border-color:var(--err)" data-go="sinpe-historial">${ic('unlink')}Desafiliar</span>`))},
+
+{id:'sinpe-historial', name:'SINPE Móvil · historial de un teléfono', html:() => shell('sinpe', head('Historial de afiliaciones', 'Eventos registrados automáticamente, en orden cronológico.', `<span class="btn">${ic('dl')}Exportar</span>`, '<a data-go="sinpe">SINPE Móvil</a> / Historial') + `
+  <div class="grid gm2">
+    <div class="stack" style="gap:24px">
+      <div class="card"><div class="card-b stack" style="gap:16px">
+        ${field('Teléfono', '<span class="mono b">8888-1111</span>', {sel:1})}
+        <div class="kv"><span>Titular</span><b>Ana Rodríguez Mora</b></div>
+        <div class="kv"><span>Estado actual</span>${afil(1)}</div>
+        <div class="kv"><span>Cuenta vigente</span>${ib('CR21…7890')}</div>
+        <div class="kv"><span>Afiliado desde</span><b>20/07/2026</b></div>
+      </div></div>
+      <div class="alert a-info">${ic('info')}<div>Un traslado genera dos eventos: la desafiliación de la cuenta anterior y la afiliación a la nueva.</div></div>
+    </div>
+    <div class="card"><div class="card-h"><h3>Eventos</h3><span class="badge b-neu plain">5</span></div><div class="card-b"><div class="tl">
+      ${[
+        ['15/03/2026 09:12', 'AFILIACION', 'CR21015200001234567890', 'Afiliación inicial'],
+        ['02/05/2026 14:30', 'DESAFILIACION', 'CR21015200001234567890', 'Traslado'],
+        ['02/05/2026 14:30', 'AFILIACION', 'CR54015200004445556667', 'Traslado'],
+        ['20/07/2026 11:05', 'DESAFILIACION', 'CR54015200004445556667', 'Traslado'],
+        ['20/07/2026 11:05', 'AFILIACION', 'CR21015200001234567890', 'Traslado · vigente']
+      ].map(([f, e, c, n]) => `<div class="tl-i"><div class="tl-d ${e === 'AFILIACION' ? 'ic ok' : 'ic err'}">${ic(e === 'AFILIACION' ? 'link' : 'unlink')}</div>
+        <div style="flex:1;display:flex;align-items:center;gap:16px;padding-top:4px"><div style="flex:1">${badge(e, e === 'AFILIACION' ? 'ok' : 'err', true)}<div style="margin-top:6px">${ib(c)}</div></div>
+        <div class="r"><div class="b">${f}</div><div class="small muted">${n}</div></div></div></div>`).join('')}
+    </div></div></div>
+  </div>`)},
+
+{id:'transferir-tel', name:'Transferir · por teléfono (SINPE Móvil)', html:() => shell('transferir-tel', head('Transferir', 'Envía dinero por SINPE Móvil o directamente entre cuentas IBAN.') + transferTabs('tel') + `
+  <div class="grid gm">
+    <div class="card"><div class="card-h"><div class="ic">${ic('phone')}</div><h3>Transferencia SINPE Móvil</h3></div><div class="card-b stack" style="gap:18px">
+      ${field('Teléfono origen', '<span class="mono b">8888-1111</span><span class="muted">· Ana Rodríguez Mora · CR21…7890</span><span class="end small muted">Saldo ₡850.000,00</span>', {sel:1})}
+      <div class="field"><label>Teléfono destino</label><div class="input focus"><span class="mono b">8888 3333</span></div>
+        <div class="dest">${ic('check').replace('<svg', '<svg width="16" height="16"')}<div><b>Carlos Jiménez Solís</b> · Banco Volcán · cuenta ${ib('CR63…2223')} en CRC</div></div></div>
+      <div class="form">
+        ${field('Monto', '<span class="pre">₡</span><span class="b">25.000,00</span>')}
+        ${field('Descripción (opcional)', 'Almuerzo viernes')}
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px"><span class="btn">Limpiar</span><span class="btn pri" data-go="transferir-confirmar">Continuar ${ic('right')}</span></div>
+    </div></div>
+    ${transferRules(false)}
+  </div>`)},
+
+{id:'transferir-iban', name:'Transferir · por IBAN', html:() => shell('transferir-tel', head('Transferir', 'Envía dinero por SINPE Móvil o directamente entre cuentas IBAN.') + transferTabs('iban') + `
+  <div class="grid gm">
+    <div class="card"><div class="card-h"><div class="ic">${ic('card')}</div><h3>Transferencia entre cuentas IBAN</h3></div><div class="card-b stack" style="gap:18px">
+      ${field('Cuenta origen', '<span class="mono b">CR21015200001234567890</span><span class="muted">· Ana Rodríguez</span><span class="end small muted">₡850.000,00</span>', {sel:1})}
+      <div class="field"><label>IBAN destino</label><div class="input focus"><span class="mono b">CR88090100007778889990</span><span class="end small" style="color:var(--ok)">22/22</span></div>
+        <div class="dest">${ic('check').replace('<svg', '<svg width="16" height="16"')}<div><b>María Fernández Vargas</b> · Cooperativa Arenal · ${mon('CRC')} misma moneda</div></div></div>
+      <div class="form">
+        ${field('Monto', '<span class="pre">₡</span><span class="b">40.000,00</span>')}
+        ${field('Descripción (opcional)', 'Pago alquiler')}
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px"><span class="btn">Limpiar</span><span class="btn pri" data-go="transferir-confirmar">Continuar ${ic('right')}</span></div>
+    </div></div>
+    ${transferRules(true)}
+  </div>`)},
+
+{id:'transferir-confirmar', name:'Transferir · confirmar', html:() => shell('transferir-tel', head('Confirmar transferencia', 'Revisa los datos antes de enviar.', '', '<a data-go="transferir-tel">Transferir</a> / Confirmar') + `
+  <div class="card" style="width:640px;margin:0 auto">
+    <div class="card-b" style="text-align:center;padding:28px 24px 8px"><div class="muted">Monto a transferir</div><div class="amount">₡25.000,00</div><div style="margin-top:6px">${badge('SINPE Móvil', 'info', true)}</div></div>
+    <div class="card-b" style="display:grid;grid-template-columns:1fr 40px 1fr;gap:8px;align-items:center">
+      <div class="card" style="padding:16px"><div class="small muted">Origen</div><div class="b" style="margin-top:4px">Ana Rodríguez Mora</div><div>${ib('8888-1111')}</div><div class="small muted">${ib('CR21…7890')} · JUNTAUCR</div></div>
+      <div class="arrow">${ic('right')}</div>
+      <div class="card" style="padding:16px"><div class="small muted">Destino</div><div class="b" style="margin-top:4px">Carlos Jiménez Solís</div><div>${ib('8888-3333')}</div><div class="small muted">${ib('CR63…2223')} · Banco Volcán</div></div>
+    </div>
+    <div class="card-b" style="padding-top:0">
+      <div class="kv"><span>Descripción</span><b>Almuerzo viernes</b></div>
+      <div class="kv"><span>Comisión</span><b>₡0,00</b></div>
+      <div class="kv"><span>Saldo origen después</span><b>₡825.000,00</b></div>
+    </div>
+    <div class="modal-f"><span class="btn" data-go="transferir-tel">Volver</span><span class="btn" data-go="transferir-error">Simular rechazo</span><span class="btn pri" data-go="transferir-exito">${ic('lock')}Confirmar transferencia</span></div>
+  </div>`)},
+
+{id:'transferir-exito', name:'Transferir · éxito (comprobante)', html:() => shell('transferir-tel', `
+  <div class="result"><div class="big-ic" style="background:var(--ok-bg);color:var(--ok)">${ic('check')}</div>
+    <h2>Transferencia realizada</h2><p class="muted" style="margin-top:6px">El dinero fue acreditado en la cuenta destino.</p>
+    <div class="card"><div class="card-b">
+      <div class="kv"><span>Comprobante</span>${ib('TRF-000129')}</div>
+      <div class="kv"><span>Fecha</span><b>31/10/2026 11:08</b></div>
+      <div class="kv"><span>Canal</span>${badge('SINPE Móvil', 'info', true)}</div>
+      <div class="kv"><span>Origen</span><span>${ib('8888-1111')} · Ana Rodríguez Mora</span></div>
+      <div class="kv"><span>Destino</span><span>${ib('8888-3333')} · Carlos Jiménez Solís</span></div>
+      <div class="kv"><span>Monto</span><b style="font-size:18px">₡25.000,00</b></div>
+      <div class="kv"><span>Saldo disponible</span><b>₡825.000,00</b></div>
+    </div></div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:24px"><span class="btn">${ic('dl')}Descargar comprobante</span><span class="btn" data-go="movimientos">Ver movimientos</span><span class="btn pri" data-go="transferir-tel">Nueva transferencia</span></div>
+  </div>`)},
+
+{id:'transferir-error', name:'Transferir · rechazada (error de negocio)', html:() => shell('transferir-tel', `
+  <div class="result"><div class="big-ic" style="background:var(--err-bg);color:var(--err)">${ic('x')}</div>
+    <h2>Transferencia rechazada</h2><p class="muted" style="margin-top:6px">No se realizó ningún cargo. Todos los cambios fueron revertidos.</p>
+    <div class="alert a-err" style="margin-top:24px;text-align:left">${ic('alert')}<div><b>No se permite transferir entre teléfonos afiliados a la misma cuenta.</b><div style="margin-top:4px">Código de error 45000</div></div></div>
+    <div class="card"><div class="card-b">
+      <div class="kv"><span>Origen</span><span>${ib('8888-1111')} → ${ib('CR21…7890')}</span></div>
+      <div class="kv"><span>Destino</span><span>${ib('8888-2222')} → ${ib('CR21…7890')}</span></div>
+      <div class="kv"><span>Monto</span><b>₡10.000,00</b></div>
+      <div class="kv"><span>Saldo origen</span><b>₡850.000,00 <span class="muted" style="font-weight:400">(sin cambios)</span></b></div>
+    </div></div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:24px"><span class="btn" data-go="dashboard">Ir al inicio</span><span class="btn pri" data-go="transferir-tel">Corregir datos</span></div>
+  </div>`)},
+
+{id:'movimientos', name:'Movimientos y reportes', html:() => shell('movimientos', head('Movimientos', 'Transferencias enviadas y recibidas por cuenta en un período.', `<span class="btn">${ic('dl')}Exportar</span>`) + `
+  <div class="card"><div class="card-b" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:16px;align-items:end">
+    ${field('Cuenta', '<span class="mono">CR21015200001234567890</span> · Ana Rodríguez', {sel:1})}
+    ${field('Desde', '01/10/2026', {sel:1})}
+    ${field('Hasta', '31/10/2026', {sel:1})}
+    ${field('Tipo', 'Todos', {sel:1})}
+    <span class="btn pri" style="height:42px">${ic('filter')}Consultar</span>
+  </div></div>
+  <div class="grid g4">
+    <div class="card stat"><div class="k"><div class="ic neu">${ic('up')}</div>Total enviado</div><div class="v">₡132.500,00</div><div class="s">2 transferencias</div></div>
+    <div class="card stat"><div class="k"><div class="ic ok">${ic('down')}</div>Total recibido</div><div class="v">₡210.000,00</div><div class="s">2 transferencias</div></div>
+    <div class="card stat"><div class="k"><div class="ic">${ic('swap')}</div>Neto del período</div><div class="v" style="color:var(--ok)">+₡77.500,00</div><div class="s">01/10 – 31/10/2026</div></div>
+    <div class="card stat"><div class="k"><div class="ic">${ic('card')}</div>Saldo actual</div><div class="v">₡850.000,00</div><div class="s">${mon('CRC')}</div></div>
+  </div>
+  <div class="card"><div class="card-h"><h3>Detalle de movimientos</h3></div>
+    <table><tr><th>Fecha</th><th>Comprobante</th><th>Tipo</th><th>Canal</th><th>Contraparte</th><th>Descripción</th><th class="r">Monto</th></tr>
+      <tr><td>31/10/2026 10:42</td><td>${ib('TRF-000128')}</td><td>${badge('Enviado', 'neu', true)}</td><td>SINPE Móvil</td><td>${ib('8888-3333')} · Carlos Jiménez</td><td class="muted">Almuerzo</td><td class="r neg">−₡25.000,00</td></tr>
+      <tr><td>31/10/2026 09:15</td><td>${ib('TRF-000127')}</td><td>${badge('Recibido', 'ok', true)}</td><td>IBAN</td><td>${ib('CR88…9990')} · María Fernández</td><td class="muted">Pago servicios</td><td class="r pos">+₡150.000,00</td></tr>
+      <tr><td>30/10/2026 17:03</td><td>${ib('TRF-000126')}</td><td>${badge('Recibido', 'ok', true)}</td><td>SINPE Móvil</td><td>${ib('8333-4444')} · María Fernández</td><td class="muted">Préstamo</td><td class="r pos">+₡60.000,00</td></tr>
+      <tr><td>29/10/2026 08:47</td><td>${ib('TRF-000124')}</td><td>${badge('Enviado', 'neu', true)}</td><td>IBAN</td><td>${ib('CR63…2223')} · Carlos Jiménez</td><td class="muted">Factura octubre</td><td class="r neg">−₡107.500,00</td></tr>
+    </table></div>
+  <div class="card"><div class="card-h"><h3>Conservación del total · escenario de prueba</h3><div class="actions">${badge('Total conservado', 'ok')}</div></div>
+    <table><tr><th>Cuenta participante</th><th>Titular</th><th class="r">Saldo inicial</th><th class="r">Enviado</th><th class="r">Recibido</th><th class="r">Saldo final</th></tr>
+      <tr><td>${ib('CR21015200001234567890')}</td><td>Ana Rodríguez Mora</td><td class="r">₡772.500,00</td><td class="r">₡132.500,00</td><td class="r">₡210.000,00</td><td class="r b">₡850.000,00</td></tr>
+      <tr><td>${ib('CR63081400005551112223')}</td><td>Carlos Jiménez Solís</td><td class="r">₡300.500,00</td><td class="r">₡12.500,00</td><td class="r">₡132.500,00</td><td class="r b">₡420.500,00</td></tr>
+      <tr><td>${ib('CR88090100007778889990')}</td><td>María Fernández Vargas</td><td class="r">₡1.397.500,00</td><td class="r">₡210.000,00</td><td class="r">₡12.500,00</td><td class="r b">₡1.200.000,00</td></tr>
+      <tr><td class="b">Total</td><td></td><td class="r b">₡2.470.500,00</td><td class="r b">₡355.000,00</td><td class="r b">₡355.000,00</td><td class="r b">₡2.470.500,00</td></tr>
+    </table></div>`)},
+
+{id:'catalogos', name:'Catálogos · entidades y monedas', html:() => shell('catalogos', head('Catálogos', 'Entidades financieras y monedas usadas por las cuentas.') + `
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><div class="ic">${ic('bank')}</div><h3>Entidades financieras</h3><div class="actions"><span class="btn sm pri">${ic('plus')}Agregar</span></div></div>
+      <table><tr><th>Código</th><th>Nombre</th><th class="r">Cuentas</th><th></th></tr>
+        <tr><td>${ib('0152')}</td><td class="b">JUNTAUCR</td><td class="r">4</td><td class="r"><span class="btn sm">Editar</span></td></tr>
+        <tr><td>${ib('0814')}</td><td class="b">Banco Volcán</td><td class="r">2</td><td class="r"><span class="btn sm">Editar</span></td></tr>
+        <tr><td>${ib('0901')}</td><td class="b">Cooperativa Arenal</td><td class="r">1</td><td class="r"><span class="btn sm">Editar</span></td></tr>
+        <tr><td>${ib('0733')}</td><td class="b">Financiera Poás</td><td class="r">0</td><td class="r"><span class="btn sm">Editar</span></td></tr>
+      </table></div>
+    <div class="card"><div class="card-h"><div class="ic">${ic('db')}</div><h3>Monedas</h3></div>
+      <table><tr><th>Código</th><th>Descripción</th><th>Símbolo</th><th class="r">Cuentas</th></tr>
+        <tr><td>${mon('CRC')}</td><td class="b">Colón costarricense</td><td>₡</td><td class="r">6</td></tr>
+        <tr><td>${mon('USD')}</td><td class="b">Dólar estadounidense</td><td>$</td><td class="r">1</td></tr>
+      </table>
+      <div class="card-b"><div class="alert a-info">${ic('info')}<div>Las cuentas guardan solo la referencia a la entidad y a la moneda; los nombres no se duplican.</div></div></div>
+    </div>
+  </div>`)}
+];
+
+/* ---------- Render ---------- */
+const q = new URLSearchParams(location.search);
+const app = document.getElementById('app');
+const frame = s => `<div class="frame" id="f-${s.id}">${s.html()}</div>`;
+
+if (q.get('pantalla')) {
+  const s = SCREENS.find(x => x.id === q.get('pantalla')) || SCREENS[0];
+  document.body.style.background = 'var(--bg)';
+  app.innerHTML = frame(s);
+  app.firstElementChild.style.minHeight = '100vh';
+} else if (q.get('modo') === 'demo') {
+  const show = () => {
+    const s = SCREENS.find(x => x.id === location.hash.slice(1)) || SCREENS[0];
+    app.innerHTML = `<div class="demo">${frame(s)}</div><div class="demo-bar">Prototipo navegable · ${s.name}<a href="?">Ver lienzo</a></div>`;
+    window.scrollTo(0, 0);
+  };
+  window.addEventListener('hashchange', show);
+  app.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) location.hash = g.dataset.go; });
+  show();
+} else {
+  app.innerHTML = `<div class="canvas">
+    <div class="canvas-head"><h1>JUNTAUCR · SINPE Móvil — Prototipo</h1>
+      <p>${SCREENS.length} pantallas · 1440 px de ancho · datos ficticios. <a href="?modo=demo">Abrir prototipo navegable →</a></p></div>
+    ${SCREENS.map((s, i) => `<div><div class="label">${String(i + 1).padStart(2, '0')} · ${s.name}</div>${frame(s)}</div>`).join('')}
+  </div>`;
+  app.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) document.getElementById('f-' + g.dataset.go)?.scrollIntoView({behavior:'smooth', block:'start'}); });
+}
+</script>
+</body>
+</html>

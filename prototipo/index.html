@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JUNTAUCR SINPE Prototipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* marco teñido del billete, hoja blanca encima */
+  --frame:#E1EBE6; --frame-hi:#D2DFD9; --sheet:#FFFFFF; --sub:#F4F8F6;
+  --line:#E2E9E5; --line-2:#C9D6CF;
+  --ink:#0F231C; --ink-2:#4A5E56; --ink-3:#62756D;
+  --accent:#0E6A52; --accent-hi:#0B5945; --accent-pale:#E0EFE8;
+  --neg:#B3261E; --neg-pale:#FBEAE8; --warn:#865600; --warn-pale:#FAF0DA;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);background:#C9D3CE;font-size:14px;line-height:1.5;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent-pale);color:var(--ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap}
+.ink2{color:var(--ink-2)} .ink3{color:var(--ink-3)} .sm{font-size:13px} .xs{font-size:12px} .b{font-weight:600} .r{text-align:right}
+
+/* ---------- lienzo / demo ---------- */
+.canvas{padding:48px 40px;display:flex;flex-direction:column;gap:64px;align-items:center}
+.canvas-head{width:1440px}
+.canvas-head h1{font-size:28px;letter-spacing:-.02em}
+.canvas-head p{color:var(--ink-2);margin-top:6px}
+.canvas-head a{color:var(--accent);font-weight:600}
+.label{width:1440px;font-weight:600;color:var(--ink-2);margin-bottom:12px;font-size:15px}
+.demo{background:var(--frame);min-height:100vh;display:flex;justify-content:center}
+
+/* ---------- marco ---------- */
+.frame{width:1440px;min-height:900px;background:var(--frame);display:grid;grid-template-columns:232px 1fr;grid-template-rows:48px 1fr;position:relative;overflow:hidden}
+.canvas .frame{box-shadow:0 12px 40px rgba(15,35,28,.16)}
+.side{grid-row:1 / 3;display:flex;flex-direction:column;padding:10px 10px 12px}
+.ws{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;height:44px;margin-bottom:14px}
+.ws .t{font-weight:700;font-size:15px;letter-spacing:-.01em;line-height:1.15}
+.ws .s{font-size:12px;color:var(--ink-2);font-weight:500}
+.ws svg.chev{margin-left:auto;width:14px;height:14px;color:var(--ink-3)}
+.grp{font-size:12px;color:var(--ink-3);font-weight:500;padding:16px 12px 6px}
+.nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:8px;color:var(--ink-2);cursor:pointer;transition:background-color 150ms ease,color 150ms ease}
+.nav svg{width:16px;height:16px;flex-shrink:0}
+.nav.on{background:var(--frame-hi);color:var(--ink);font-weight:500}
+.me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:8px}
+.me .t{font-weight:600;font-size:13px;line-height:1.2}
+.me .s{font-size:12px;color:var(--ink-2)}
+
+.top{display:flex;align-items:center;gap:16px;padding:0 20px 0 12px}
+.crumbs{display:flex;align-items:center;gap:8px;color:var(--ink-2);font-weight:500;min-width:260px}
+.crumbs a{cursor:pointer}
+.crumbs b{color:var(--ink);font-weight:600}
+.crumbs .sep{color:var(--ink-3)}
+.search{display:flex;align-items:center;gap:8px;height:32px;width:460px;margin:0 auto;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.6);color:var(--ink-3)}
+.search svg{width:15px;height:15px}
+.kbd{margin-left:auto;font-size:12px;color:var(--ink-3);border:1px solid var(--line-2);border-radius:4px;padding:0 5px;line-height:18px}
+.envt{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);font-weight:500}
+.envt i{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+
+.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:16px;margin:0 8px 8px 0;min-width:0;display:flex;flex-direction:column}
+.content{padding:28px 32px 40px;display:flex;flex-direction:column;gap:28px}
+
+/* ---------- título de pantalla ---------- */
+.title{display:flex;align-items:flex-end;gap:20px}
+.title h1{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.title p{color:var(--ink-2);margin-top:4px;max-width:70ch}
+.title .act{margin-left:auto;display:flex;gap:8px}
+
+/* ---------- botones ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:6px;font-weight:600;font-size:14px;line-height:1;border:1px solid var(--line-2);background:var(--sheet);color:var(--ink);cursor:pointer;white-space:nowrap;transition:transform 120ms var(--ease-out),background-color 150ms ease,border-color 150ms ease}
+.btn:active{transform:scale(.97)}
+.btn svg{width:16px;height:16px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.neg{color:var(--neg);border-color:#EBC3BF}
+.btn.negf{background:var(--neg);border-color:var(--neg);color:#fff}
+.btn.s{height:30px;padding:0 10px;font-size:13px}
+.btn.l{height:44px;padding:0 20px;font-size:15px}
+.btn.q{border-color:transparent;background:transparent;color:var(--accent);padding:0 4px}
+.btn.w{width:100%}
+@media (hover:hover) and (pointer:fine){
+  .nav:hover{background:rgba(255,255,255,.45);color:var(--ink)}
+  .nav.on:hover{background:var(--frame-hi)}
+  .btn:hover{border-color:#B5C5BD}
+  .btn.pri:hover{background:var(--accent-hi);border-color:var(--accent-hi)}
+  .btn.q:hover{text-decoration:underline;text-underline-offset:3px}
+  tr.go:hover td{background:var(--sub)}
+  .pick:not(.off):hover{border-color:#B5C5BD}
+}
+
+/* ---------- bloques ---------- */
+.block{border:1px solid var(--line);border-radius:12px;min-width:0}
+.bh{display:flex;align-items:center;gap:10px;padding:14px 20px;min-height:56px}
+.bh h2{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.bh .act{margin-left:auto;display:flex;gap:8px;align-items:center}
+.bb{padding:0 20px 20px}
+.bb.pt{padding-top:4px}
+.cols{display:grid;gap:24px}
+.c2{grid-template-columns:1fr 1fr} .c21{grid-template-columns:2fr 1fr} .c12{grid-template-columns:1fr 2fr} .c32{grid-template-columns:3fr 2fr}
+
+/* cifras como texto, no tarjetas */
+.figs{display:flex;gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fig{flex:1;padding:16px 24px 16px 0}
+.fig + .fig{padding-left:24px;border-left:1px solid var(--line)}
+.fig .k{color:var(--ink-2);font-size:13px;font-weight:500}
+.fig .v{font-size:22px;font-weight:600;letter-spacing:-.01em;margin-top:2px}
+.fig .n{font-size:13px;color:var(--ink-2)}
+.big{font-size:34px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.huge{font-size:44px;font-weight:600;letter-spacing:-.025em;line-height:1.05}
+.pos{color:var(--accent)} .negc{color:var(--neg)}
+
+/* tablas: reglas y alineación */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:13px;font-weight:500;color:var(--ink-2);padding:10px 20px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:12px 20px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tr.go{cursor:pointer} tr.go td{transition:background-color 150ms ease}
+tfoot td{border-top:1px solid var(--line-2);font-weight:600}
+th.r,td.r{text-align:right}
+
+/* estado: punto + texto, sin píldoras */
+.st{display:inline-flex;align-items:center;gap:7px;font-weight:500;white-space:nowrap}
+.st::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.st.ok{color:var(--accent)} .st.no{color:var(--ink-3)} .st.bad{color:var(--neg)}
+.st.hollow::before{background:transparent;box-shadow:inset 0 0 0 1.5px currentColor}
+.cur{font-size:12px;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
+.cur.usd{color:var(--warn)}
+
+.who{display:flex;align-items:center;gap:10px}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0}
+.av.l{width:52px;height:52px;font-size:18px}
+
+/* formularios */
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>label{font-size:13px;font-weight:500;color:var(--ink)}
+.in{min-height:40px;border:1px solid var(--line-2);border-radius:6px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#fff}
+.in.ph{color:var(--ink-3)}
+.in.sel::after{content:'';margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--ink-2);border-bottom:1.5px solid var(--ink-2);transform:translateY(-2px) rotate(45deg);flex-shrink:0}
+.in.foc{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-pale)}
+.in.ok{border-color:var(--accent)}
+.in .pre{color:var(--ink-2);font-weight:600}
+.in .end{margin-left:auto}
+.hint{font-size:12px;color:var(--ink-2)} .hint.ok{color:var(--accent)} .hint.bad{color:var(--neg)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:18px 20px}
+.s2{grid-column:span 2}
+
+.note{display:flex;gap:10px;padding:12px 14px;border-radius:8px;background:var(--sub);color:var(--ink);font-size:13px}
+.note svg{width:16px;height:16px;flex-shrink:0;margin-top:2px;color:var(--ink-2)}
+.note.ok{background:var(--accent-pale)} .note.ok svg{color:var(--accent)}
+.note.warn{background:var(--warn-pale)} .note.warn svg{color:var(--warn)}
+.note.bad{background:var(--neg-pale)} .note.bad svg{color:var(--neg)}
+
+.tabs{display:flex;gap:24px;border-bottom:1px solid var(--line)}
+.tab{display:flex;align-items:center;gap:8px;height:40px;color:var(--ink-2);font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .c{font-size:12px;color:var(--ink-3)}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg span{padding:0 12px;height:32px;display:flex;align-items:center;font-size:13px;font-weight:500;color:var(--ink-2);cursor:pointer}
+.seg span + span{border-left:1px solid var(--line-2)}
+.seg .on{background:var(--sub);color:var(--ink)}
+
+.checks{display:flex;flex-direction:column}
+.ck{display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:13px}
+.ck svg{width:16px;height:16px;flex-shrink:0;margin-top:2px;color:var(--accent)}
+.ck.x svg{color:var(--neg)}
+
+.pick{border:1px solid var(--line-2);border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:center;cursor:pointer;transition:border-color 150ms ease}
+.pick.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.pick.off{cursor:not-allowed;background:var(--sub);border-color:var(--line)}
+.pick .g{flex:1;min-width:0}
+.radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line-2);flex-shrink:0}
+.pick.on .radio{border:5px solid var(--accent)}
+.stack{display:flex;flex-direction:column;gap:8px}
+
+.kv{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:0}
+.kv>span:first-child{color:var(--ink-2)}
+
+/* ---------- el par SINPE: elemento propio ---------- */
+.pair{display:grid;grid-template-columns:minmax(0,max-content) 1fr minmax(0,max-content);align-items:center;gap:14px}
+.pe .pn{font-weight:600;white-space:nowrap}
+.pe .ps{font-size:12px;color:var(--ink-2);white-space:nowrap}
+.pe.r{text-align:right}
+.pl{position:relative;height:26px;display:flex;align-items:center;justify-content:center;min-width:80px}
+.pl i{position:absolute;left:4px;right:2px;top:50%;height:2px;margin-top:-1px;background:var(--accent)}
+.pl::before{content:'';position:absolute;left:0;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--accent)}
+.pl::after{content:'';position:absolute;right:1px;top:50%;width:7px;height:7px;margin-top:-4.5px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg)}
+.pa{position:relative;background:var(--sheet);padding:0 10px;font-weight:600;white-space:nowrap}
+.pair.lg .pn{font-size:20px;letter-spacing:-.01em}
+.pair.lg .ps{font-size:13px}
+.pair.lg .pa{font-size:20px}
+.pair.lg .pl{height:40px}
+.pair.mute .pl i{background:var(--line-2)} .pair.mute .pl::before{background:var(--line-2)} .pair.mute .pl::after{border-color:var(--line-2)}
+.pair.sub .pa{background:var(--sub)}
+.pair.fix{grid-template-columns:140px 1fr 140px}
+.link{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.link i{width:28px;height:2px;background:var(--accent);position:relative}
+.link i::after{content:'';position:absolute;right:0;top:-3px;width:6px;height:6px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg)}
+.acct{border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.acct + .acct{margin-top:10px}
+.acct-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ph-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.ph-row .g{flex:1}
+
+/* rechazo: dos teléfonos que caen en la misma cuenta */
+.vee{position:relative;height:150px;width:560px;margin:0 auto}
+.vee svg{position:absolute;inset:0;width:100%;height:100%}
+.vee .a,.vee .b2,.vee .c3{position:absolute;text-align:center}
+.vee .a{left:0;top:0;width:150px} .vee .b2{right:0;top:0;width:150px} .vee .c3{left:50%;bottom:0;transform:translateX(-50%);width:220px}
+
+/* ---------- capas ---------- */
+.scrim{position:absolute;inset:0;background:rgba(10,30,24,.42);z-index:5}
+.modal{position:absolute;z-index:6;left:50%;top:50%;width:560px;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(10,30,24,.28),0 2px 6px rgba(10,30,24,.08)}
+.mh{display:flex;align-items:center;padding:20px 24px 4px}
+.mh h2{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.mh .x{margin-left:auto;color:var(--ink-2);width:32px;height:32px;display:grid;place-items:center;border-radius:6px}
+.mh .x svg{width:18px;height:18px}
+.mb{padding:16px 24px 24px}
+.mf{padding:14px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.drawer{position:absolute;z-index:6;top:8px;right:8px;bottom:8px;width:460px;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(10,30,24,.28);display:flex;flex-direction:column}
+.drawer .mb{flex:1}
+
+/* movimiento: solo como respuesta, nunca de entrada (Emil Kowalski / taste) */
+.motion .modal{animation:pop 220ms var(--ease-out)}
+.motion .drawer{animation:slide 260ms var(--ease-out)}
+.motion .scrim{animation:fade 200ms ease-out}
+.motion .pair.live .pl i{animation:draw 420ms var(--ease-out) 80ms both}
+@keyframes pop{from{opacity:0;transform:translate(-50%,-50%) scale(.96)}}
+@keyframes slide{from{opacity:0;transform:translateX(24px)}}
+@keyframes fade{from{opacity:0}}
+@keyframes draw{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@media (prefers-reduced-motion:reduce){
+  .motion .modal,.motion .drawer,.motion .pair.live .pl i{animation:fade 150ms ease-out}
+  .btn:active{transform:none}
+}
+
+/* login */
+.login{grid-column:1 / 3;grid-row:1 / 3;display:grid;place-items:center;padding:40px}
+.login-card{width:440px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:18px}
+.login-card h1{font-size:24px;letter-spacing:-.02em;font-weight:600}
+
+.demo-bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:999px;padding:6px 6px 6px 16px;display:flex;gap:12px;align-items:center;font-size:13px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.demo-bar a{color:#fff;background:rgba(255,255,255,.14);padding:6px 12px;border-radius:999px;text-decoration:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const P = {
+  home:'M3 11l9-8 9 8M5 10v10h14V10',
+  users:'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  card:'M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM2 10h20M6 15h4',
+  phone:'M8 2h8a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2',
+  link:'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1',
+  swap:'M4 7h15l-4-4M20 17H5l4 4',
+  list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  db:'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  search:'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M21 21l-5-5',
+  plus:'M12 5v14M5 12h14',
+  check:'M5 12l5 5L20 7',
+  x:'M6 6l12 12M18 6L6 18',
+  right:'M5 12h14M13 6l6 6-6 6',
+  alert:'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0',
+  info:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 16v-4M12 8h.01',
+  clock:'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18',
+  unlink:'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7M3 3l18 18',
+  dl:'M12 3v12M7 10l5 5 5-5M4 21h16',
+  lock:'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4',
+  updown:'M8 9l4-4 4 4M8 15l4 4 4-4'
+};
+const ic = (n, s = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"${s}><path d="${P[n]}"/></svg>`;
+const MARK = (s = 28) => `<svg width="${s}" height="${s}" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#0E6A52"/><circle cx="8.5" cy="14" r="3.2" fill="#fff"/><circle cx="19.5" cy="14" r="3.2" fill="#fff"/><path d="M11.7 14h4.6" stroke="#fff" stroke-width="2.2"/></svg>`;
+
+/* ---------- formato ---------- */
+const fm = n => '₡' + n.toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2});
+const gi = x => x.replace(/(.{4})/g, '$1 ').trim();          // IBAN impreso en grupos de 4
+const sh = x => x.slice(0,4) + ' … ' + x.slice(-4);
+const num = x => `<span class="num">${x}</span>`;
+const st = s => `<span class="st ${{ACTIVO:'ok', ACTIVA:'ok', INACTIVO:'no', INACTIVA:'no', BLOQUEADA:'bad'}[s]}">${s[0] + s.slice(1).toLowerCase()}</span>`;
+const af = a => a ? '<span class="st ok">Afiliado</span>' : '<span class="st no hollow">Sin afiliar</span>';
+const cur = m => `<span class="cur${m === 'USD' ? ' usd' : ''}">${m}</span>`;
+
+/* ---------- datos ficticios ---------- */
+const HUE = {'Ana Rodríguez Mora':20, 'Carlos Jiménez Solís':210, 'María Fernández Vargas':280, 'José Ramírez Castro':80, 'Laura Chaves Quesada':340};
+const av = (n, l) => `<span class="av${l ? ' l' : ''}" style="background:hsl(${HUE[n]} 70% 92%);color:hsl(${HUE[n]} 45% 30%)">${n.split(' ').slice(0,2).map(w => w[0]).join('')}</span>`;
+const C = [
+  {id:'1-1234-0567', n:'Ana Rodríguez Mora',     e:'ana.rodriguez@correo.cr', f:'12/03/2026', s:'ACTIVO'},
+  {id:'2-0456-0789', n:'Carlos Jiménez Solís',   e:'cjimenez@correo.cr',      f:'20/03/2026', s:'ACTIVO'},
+  {id:'1-0987-0654', n:'María Fernández Vargas', e:'maria.fv@correo.cr',      f:'02/04/2026', s:'ACTIVO'},
+  {id:'3-0321-0111', n:'José Ramírez Castro',    e:'jramirez@correo.cr',      f:'18/05/2026', s:'INACTIVO'},
+  {id:'1-1111-0222', n:'Laura Chaves Quesada',   e:'laura.chaves@correo.cr',  f:'07/07/2026', s:'ACTIVO'}
+];
+const A = [
+  {i:'CR21015200001234567890', c:'Ana Rodríguez Mora',     en:'JUNTAUCR',           m:'CRC', s:850000,  f:'15/03/2026', st:'ACTIVA'},
+  {i:'CR54015200004445556667', c:'Ana Rodríguez Mora',     en:'JUNTAUCR',           m:'CRC', s:120000,  f:'01/05/2026', st:'ACTIVA'},
+  {i:'CR47015200009876543210', c:'Ana Rodríguez Mora',     en:'JUNTAUCR',           m:'USD', s:1250,    f:'15/03/2026', st:'ACTIVA'},
+  {i:'CR63081400005551112223', c:'Carlos Jiménez Solís',   en:'Banco Volcán',       m:'CRC', s:420500,  f:'21/03/2026', st:'ACTIVA'},
+  {i:'CR88090100007778889990', c:'María Fernández Vargas', en:'Cooperativa Arenal', m:'CRC', s:1200000, f:'03/04/2026', st:'ACTIVA'},
+  {i:'CR12015200003334445556', c:'José Ramírez Castro',    en:'JUNTAUCR',           m:'CRC', s:15000,   f:'19/05/2026', st:'INACTIVA'},
+  {i:'CR35081400002223334445', c:'Laura Chaves Quesada',   en:'Banco Volcán',       m:'CRC', s:98300,   f:'08/07/2026', st:'BLOQUEADA'}
+];
+const T = [
+  {n:'8888-1111', c:'Ana Rodríguez Mora',     a:'CR21015200001234567890', d:'20/07/2026'},
+  {n:'8888-2222', c:'Ana Rodríguez Mora',     a:'CR21015200001234567890', d:'16/03/2026'},
+  {n:'8777-6666', c:'Ana Rodríguez Mora',     a:null},
+  {n:'8888-3333', c:'Carlos Jiménez Solís',   a:'CR63081400005551112223', d:'22/03/2026'},
+  {n:'8333-4444', c:'María Fernández Vargas', a:'CR88090100007778889990', d:'05/04/2026'},
+  {n:'6000-1234', c:'José Ramírez Castro',    a:null, why:'Su única cuenta está inactiva'},
+  {n:'7111-2222', c:'Laura Chaves Quesada',   a:null, why:'Su única cuenta está bloqueada'}
+];
+// Transferencias del escenario (todas ya confirmadas). o/d: cuenta; po/pd: teléfono si fue SINPE.
+const TR = [
+  {id:'TRF-000124', dia:'29/10/2026', h:'08:47', k:'IBAN',  o:'CR21015200001234567890', d:'CR63081400005551112223', m:107500, t:'Factura octubre'},
+  {id:'TRF-000125', dia:'30/10/2026', h:'12:20', k:'SINPE', o:'CR63081400005551112223', d:'CR88090100007778889990', po:'8888-3333', pd:'8333-4444', m:12500, t:'Café'},
+  {id:'TRF-000126', dia:'30/10/2026', h:'17:03', k:'SINPE', o:'CR88090100007778889990', d:'CR21015200001234567890', po:'8333-4444', pd:'8888-2222', m:60000, t:'Préstamo'},
+  {id:'TRF-000127', dia:'31/10/2026', h:'09:15', k:'IBAN',  o:'CR88090100007778889990', d:'CR21015200001234567890', m:150000, t:'Pago servicios'},
+  {id:'TRF-000128', dia:'31/10/2026', h:'10:42', k:'SINPE', o:'CR21015200001234567890', d:'CR63081400005551112223', po:'8888-1111', pd:'8888-3333', m:25000, t:'Almuerzo'}
+];
+const acc = i => A.find(a => a.i === i);
+const first = n => n.split(' ').slice(0,2).join(' ');
+const HOY = '31/10/2026';
+const hoy = TR.filter(t => t.dia === HOY);
+const hoyTotal = hoy.reduce((s, t) => s + t.m, 0);
+const crcTotal = A.filter(a => a.m === 'CRC').reduce((s, a) => s + a.s, 0);
+
+// Saldos al inicio del escenario: se reconstruyen deshaciendo las transferencias.
+const inicio = {}; A.forEach(a => inicio[a.i] = a.s);
+TR.forEach(t => { inicio[t.o] += t.m; inicio[t.d] -= t.m; });
+const part = ['CR21015200001234567890', 'CR63081400005551112223', 'CR88090100007778889990'];
+const sumIni = part.reduce((s, i) => s + inicio[i], 0), sumFin = part.reduce((s, i) => s + acc(i).s, 0);
+console.assert(sumIni === sumFin, 'el total del escenario debe conservarse');
+console.assert(hoyTotal === 175000, 'transferido hoy');
+
+const CTA = 'CR21015200001234567890';
+const mov = TR.filter(t => t.o === CTA || t.d === CTA);
+const enviado = mov.filter(t => t.o === CTA).reduce((s, t) => s + t.m, 0);
+const recibido = mov.filter(t => t.d === CTA).reduce((s, t) => s + t.m, 0);
+
+/* ---------- piezas ---------- */
+const NAV = [
+  ['Operación', [['dashboard','Inicio','home'], ['transferir-tel','Transferir','swap'], ['movimientos','Movimientos','list']]],
+  ['Registro', [['clientes','Clientes','users'], ['cuentas','Cuentas IBAN','card'], ['telefonos','Teléfonos','phone'], ['sinpe','SINPE Móvil','link']]],
+  ['Sistema', [['catalogos','Catálogos','db']]]
+];
+const shell = (active, crumbs, body, layer = '') => `
+  <aside class="side">
+    <div class="ws">${MARK()}<div><div class="t">JUNTAUCR</div><div class="s">Operaciones SINPE</div></div>${ic('updown', ' class="chev"')}</div>
+    ${NAV.map(([g, items]) => `<div class="grp">${g}</div>${items.map(([id, t, i]) => `<div class="nav${id === active ? ' on' : ''}" data-go="${id}">${ic(i)}${t}</div>`).join('')}`).join('')}
+    <div class="me"><span class="av" style="background:#fff;color:var(--accent)">AO</span><div><div class="t">Admin Operaciones</div><div class="s">admin@juntaucr.cr</div></div></div>
+  </aside>
+  <header class="top">
+    <div class="crumbs">${crumbs}</div>
+    <div class="search">${ic('search')}Buscar cliente, IBAN o teléfono<span class="kbd">Ctrl K</span></div>
+    <div class="envt"><i></i>Simulación · datos ficticios</div>
+  </header>
+  <main class="sheet"><div class="content">${body}</div></main>${layer}`;
+const cr = (...p) => p.map((x, i) => i === p.length - 1 ? `<b>${x[0]}</b>` : `<a data-go="${x[1]}">${x[0]}</a><span class="sep">/</span>`).join('');
+const title = (h, p, act = '') => `<div class="title"><div><h1>${h}</h1>${p ? `<p>${p}</p>` : ''}</div>${act ? `<div class="act">${act}</div>` : ''}</div>`;
+const field = (label, value, o = {}) => `<div class="field${o.s2 ? ' s2' : ''}"><label>${label}</label>
+  <div class="in${o.sel ? ' sel' : ''}${o.ph ? ' ph' : ''}${o.st ? ' ' + o.st : ''}">${value}</div>${o.hint ? `<div class="hint${o.hk ? ' ' + o.hk : ''}">${o.hint}</div>` : ''}</div>`;
+const ck = (t, bad) => `<div class="ck${bad ? ' x' : ''}">${ic(bad ? 'x' : 'check')}<div>${t}</div></div>`;
+const modal = (h, body, foot) => `<div class="scrim"></div><div class="modal" role="dialog" aria-label="${h}"><div class="mh"><h2>${h}</h2><span class="x" aria-label="Cerrar">${ic('x')}</span></div><div class="mb">${body}</div><div class="mf">${foot}</div></div>`;
+const drawer = (h, body, foot) => `<div class="scrim"></div><div class="drawer" role="dialog" aria-label="${h}"><div class="mh"><h2>${h}</h2><span class="x" aria-label="Cerrar">${ic('x')}</span></div><div class="mb">${body}</div><div class="mf">${foot}</div></div>`;
+const pair = (a, b, amt, cls = '') => `<div class="pair ${cls}"><div class="pe"><div class="pn num">${a[0]}</div><div class="ps">${a[1]}</div></div><div class="pl"><i></i><span class="pa num">${amt}</span></div><div class="pe r"><div class="pn num">${b[0]}</div><div class="ps">${b[1]}</div></div></div>`;
+const trPair = (t, cls) => {
+  const o = acc(t.o), d = acc(t.d);
+  return t.k === 'SINPE'
+    ? pair([t.po, first(o.c)], [t.pd, first(d.c)], fm(t.m), cls)
+    : pair([sh(t.o), first(o.c)], [sh(t.d), first(d.c)], fm(t.m), cls);
+};
+
+/* ---------- cuerpos reutilizables ---------- */
+const clientesBody = () => title('Clientes', `${C.length} clientes registrados, ${C.filter(c => c.s === 'ACTIVO').length} activos.`, `<span class="btn pri" data-go="cliente-nuevo">${ic('plus')}Nuevo cliente</span>`) + `
+  <div style="display:flex;gap:12px;align-items:center"><div class="in ph" style="width:320px;min-height:34px">${ic('search', ' width="15" height="15"')}Identificación o nombre</div><div class="seg"><span class="on">Todos</span><span>Activos</span><span>Inactivos</span></div></div>
+  <div class="block"><table>
+    <thead><tr><th>Cliente</th><th>Identificación</th><th>Registro</th><th class="r">Cuentas</th><th class="r">Teléfonos</th><th class="r">Afiliados</th><th>Estado</th></tr></thead>
+    <tbody>${C.map(c => `<tr class="go" data-go="cliente-detalle"><td><div class="who">${av(c.n)}<div><div class="b">${c.n}</div><div class="xs ink2">${c.e}</div></div></div></td>
+      <td>${num(c.id)}</td><td>${num(c.f)}</td><td class="r">${num(A.filter(a => a.c === c.n).length)}</td><td class="r">${num(T.filter(t => t.c === c.n).length)}</td>
+      <td class="r">${num(T.filter(t => t.c === c.n && t.a).length)}</td><td>${st(c.s)}</td></tr>`).join('')}</tbody>
+  </table></div>`;
+
+const telefonosBody = () => title('Teléfonos', 'Registrar un número no lo afilia a SINPE Móvil; la afiliación es un paso aparte.', `<span class="btn pri" data-go="telefono-nuevo">${ic('plus')}Registrar teléfono</span>`) + `
+  <div class="tabs"><div class="tab on">Todos <span class="c">${T.length}</span></div><div class="tab">Afiliados <span class="c">${T.filter(t => t.a).length}</span></div><div class="tab">Sin afiliar <span class="c">${T.filter(t => !t.a).length}</span></div></div>
+  <div class="block"><table>
+    <thead><tr><th>Número</th><th>Titular</th><th>Afiliación SINPE Móvil</th><th>Desde</th><th class="r"></th></tr></thead>
+    <tbody>${T.map(t => `<tr><td class="b">${num(t.n)}</td><td><div class="who">${av(t.c)}${t.c}</div></td>
+      <td>${t.a ? `<span class="link"><span class="st ok">Afiliado</span><i></i>${num(gi(t.a))}</span>` : `${af(null)}${t.why ? ` <span class="sm ink2">· ${t.why}</span>` : ''}`}</td>
+      <td>${t.d ? num(t.d) : '<span class="ink3">—</span>'}</td>
+      <td class="r">${t.a ? `<span class="btn s" data-go="sinpe-trasladar">Trasladar</span> <span class="btn s" data-go="sinpe-historial">Historial</span>`
+        : t.why ? `<span class="btn s" data-go="sinpe-historial">Historial</span>` : `<span class="btn s pri" data-go="sinpe">Afiliar</span> <span class="btn s" data-go="sinpe-historial">Historial</span>`}</td></tr>`).join('')}</tbody>
+  </table></div>`;
+
+const sinpeBody = () => {
+  const porCuenta = [...new Set(T.filter(t => t.a).map(t => t.a))];
+  return title('SINPE Móvil', `${T.filter(t => t.a).length} teléfonos afiliados en ${porCuenta.length} cuentas. ${T.filter(t => !t.a).length} siguen sin afiliar.`) + `
+  <div class="cols c12">
+    <div class="block"><div class="bh"><h2>Afiliar un teléfono</h2></div><div class="bb stack" style="gap:16px">
+      ${field('Teléfono', `<span class="b num">8777-6666</span><span class="ink2">Ana Rodríguez Mora</span>`, {sel:1})}
+      <div class="field"><label>Cuenta</label><div class="stack">
+        <div class="pick on"><span class="radio"></span><div class="g"><div class="b num">${gi('CR21015200001234567890')}</div><div class="xs ink2">JUNTAUCR · CRC · Activa</div></div></div>
+        <div class="pick"><span class="radio"></span><div class="g"><div class="b num">${gi('CR54015200004445556667')}</div><div class="xs ink2">JUNTAUCR · CRC · Activa</div></div></div>
+        <div class="pick off"><span class="radio"></span><div class="g"><div class="b num ink3">${gi('CR47015200009876543210')}</div><div class="xs" style="color:var(--neg)">No se puede: la cuenta es en USD</div></div></div>
+      </div><div class="hint">Solo aparecen cuentas de Ana Rodríguez Mora. Se afilian únicamente cuentas activas en colones.</div></div>
+      <span class="btn pri" data-go="telefonos">${ic('link')}Afiliar 8777-6666</span>
+    </div></div>
+    <div class="block"><div class="bh"><h2>Afiliaciones vigentes</h2><div class="act"><span class="sm ink2">Agrupadas por cuenta</span></div></div><div class="bb">
+      ${porCuenta.map(i => { const a = acc(i); return `<div class="acct"><div class="acct-h">${av(a.c)}<div style="flex:1"><div class="b num">${gi(i)}</div><div class="xs ink2">${a.c} · ${a.en}</div></div>${cur(a.m)}</div>
+        ${T.filter(t => t.a === i).map(t => `<div class="ph-row"><span class="link"><span class="b num">${t.n}</span><i></i></span><div class="g sm ink2">desde ${num(t.d)}</div>
+          <span class="btn s" data-go="sinpe-trasladar">Trasladar</span><span class="btn s neg" data-go="sinpe-desafiliar">Desafiliar</span><span class="btn s" data-go="sinpe-historial">Historial</span></div>`).join('')}
+        ${T.filter(t => t.a === i).length > 1 ? `<div class="xs ink2" style="padding-top:8px">Estos números comparten cuenta: no pueden transferirse entre sí.</div>` : ''}</div>`; }).join('')}
+    </div></div>
+  </div>`;
+};
+
+const transferTabs = on => `<div class="tabs"><div class="tab${on === 'tel' ? ' on' : ''}" data-go="transferir-tel">Por teléfono</div><div class="tab${on === 'iban' ? ' on' : ''}" data-go="transferir-iban">Por IBAN</div></div>`;
+
+/* ---------- pantallas ---------- */
+const SCREENS = [
+{id:'login', name:'Inicio de sesión', html:() => `<div class="login"><div>
+  <div class="login-card">
+    <div style="display:flex;align-items:center;gap:10px">${MARK(32)}<div><div class="b" style="font-size:16px">JUNTAUCR</div><div class="xs ink2">Operaciones SINPE</div></div></div>
+    <div><h1>Ingresar</h1><p class="ink2" style="margin-top:4px">Usa tu usuario de operaciones.</p></div>
+    ${field('Correo', 'admin@juntaucr.cr', {st:'foc'})}
+    ${field('Contraseña', '••••••••••')}
+    <span class="btn pri l w" data-go="dashboard">Ingresar</span>
+  </div>
+  <p class="xs ink2" style="text-align:center;margin-top:16px">Entorno de simulación con datos ficticios. No se conecta con el Banco Central de Costa Rica.</p>
+</div></div>`},
+
+{id:'dashboard', name:'Inicio', html:() => shell('dashboard', cr(['Inicio']), title('Hoy, 31 de octubre', `Se movieron ${fm(hoyTotal)} en ${hoy.length} transferencias. Hay 3 teléfonos registrados sin afiliar.`,
+  `<span class="btn" data-go="sinpe">Afiliar teléfono</span><span class="btn pri" data-go="transferir-tel">${ic('swap')}Nueva transferencia</span>`) + `
+  <div class="figs">
+    <div class="fig"><div class="k">Clientes</div><div class="v num">${C.length}</div><div class="n">${C.filter(c => c.s === 'ACTIVO').length} activos</div></div>
+    <div class="fig"><div class="k">Cuentas IBAN</div><div class="v num">${A.length}</div><div class="n">5 activas, 1 inactiva, 1 bloqueada</div></div>
+    <div class="fig"><div class="k">Teléfonos</div><div class="v num">${T.length}</div><div class="n">${T.filter(t => t.a).length} afiliados a SINPE Móvil</div></div>
+    <div class="fig"><div class="k">Saldo en colones</div><div class="v num">${fm(crcTotal)}</div><div class="n">más $1.250,00 en 1 cuenta USD</div></div>
+  </div>
+  <div class="cols c21">
+    <div class="block"><div class="bh"><h2>Transferencias</h2><div class="act"><span class="btn q" data-go="movimientos">Ver movimientos</span></div></div>
+      ${[['Hoy', HOY], ['Ayer', '30/10/2026'], ['Miércoles 29', '29/10/2026']].map(([lbl, d]) => `<div style="padding:4px 20px 0" class="sm ink2 b">${lbl}</div>
+        <table><tbody>${TR.filter(t => t.dia === d).reverse().map(t => `<tr><td style="width:64px" class="ink2">${num(t.h)}</td><td style="width:100%">${trPair(t, 'fix')}</td><td class="sm ink2" style="width:90px">${t.k === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td></tr>`).join('')}</tbody></table>`).join('')}
+    </div>
+    <div class="block"><div class="bh"><h2>Por atender</h2></div><div class="bb">
+      ${T.filter(t => !t.a).map(t => `<div class="ph-row" style="align-items:flex-start;padding:12px 0">${av(t.c)}<div class="g"><div class="b num">${t.n}</div><div class="sm ink2">${t.c}</div><div class="xs ${t.why ? '' : 'pos'}" style="margin-top:2px;${t.why ? 'color:var(--neg)' : ''}">${t.why || 'Tiene 2 cuentas en colones disponibles'}</div></div>${t.why ? '' : `<span class="btn s pri" data-go="sinpe">Afiliar</span>`}</div>`).join('')}
+      <div class="note" style="margin-top:8px">${ic('info')}<div>Para afiliar a José o a Laura primero hay que reactivar o desbloquear su cuenta.</div></div>
+    </div></div>
+  </div>`)},
+
+{id:'clientes', name:'Clientes', html:() => shell('clientes', cr(['Clientes']), clientesBody())},
+
+{id:'cliente-nuevo', name:'Clientes · nuevo cliente (panel)', html:() => shell('clientes', cr(['Clientes']), clientesBody(), drawer('Nuevo cliente', `<div class="stack" style="gap:18px">
+  ${field('Identificación', '<span class="num">1-1456-0789</span>', {st:'foc', hint:'No puede repetirse entre clientes.'})}
+  ${field('Nombre completo', 'Daniela Soto Araya')}
+  ${field('Correo electrónico', 'daniela.soto@correo.cr')}
+  ${field('Estado', 'Activo', {sel:1})}
+  <div class="note">${ic('info')}<div>La fecha de registro se asigna al guardar. Cuentas y teléfonos se agregan desde la ficha del cliente.</div></div>
+</div>`, `<span class="btn" data-go="clientes">Cancelar</span><span class="btn pri" data-go="cliente-detalle">Guardar cliente</span>`))},
+
+{id:'cliente-detalle', name:'Clientes · ficha (cuentas y teléfonos)', html:() => shell('clientes', cr(['Clientes', 'clientes'], ['Ana Rodríguez Mora']), `
+  <div class="title"><div class="who" style="gap:16px">${av('Ana Rodríguez Mora', 1)}<div><h1>Ana Rodríguez Mora</h1><p>${num('1-1234-0567')} · ana.rodriguez@correo.cr · cliente desde ${num('12/03/2026')}</p></div></div>
+    <div class="act" style="align-items:center">${st('ACTIVO')}<span class="btn">Editar</span><span class="btn pri" data-go="cuenta-nueva">${ic('plus')}Nueva cuenta</span></div></div>
+  <div class="cols c32">
+    <div class="block"><div class="bh"><h2>Cuentas IBAN</h2><span class="sm ink2">3</span></div><table>
+      <thead><tr><th>IBAN</th><th>Moneda</th><th class="r">Saldo</th><th>Estado</th></tr></thead>
+      <tbody>${A.filter(a => a.c === 'Ana Rodríguez Mora').map(a => `<tr class="go" data-go="cuenta-detalle"><td><div class="b num">${gi(a.i)}</div><div class="xs ink2">${a.en}</div></td><td>${cur(a.m)}</td><td class="r b num">${a.m === 'USD' ? '$1.250,00' : fm(a.s)}</td><td>${st(a.st)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="block"><div class="bh"><h2>Teléfonos</h2><span class="sm ink2">3</span><div class="act"><span class="btn s" data-go="telefono-nuevo">${ic('plus')}Registrar</span></div></div><div class="bb">
+      ${T.filter(t => t.c === 'Ana Rodríguez Mora').map(t => `<div class="ph-row"><div class="g"><div class="b num">${t.n}</div>${t.a ? `<div class="sm ink2 link">${af(1)}<i></i>${num(sh(t.a))}</div>` : `<div class="sm">${af(null)}</div>`}</div>${t.a ? `<span class="btn s" data-go="sinpe-historial">Historial</span>` : `<span class="btn s pri" data-go="sinpe">Afiliar</span>`}</div>`).join('')}
+      <div class="note" style="margin-top:12px">${ic('info')}<div>8888-1111 y 8888-2222 están en la misma cuenta, así que no pueden transferirse entre sí.</div></div>
+    </div></div>
+  </div>`)},
+
+{id:'cuentas', name:'Cuentas IBAN', html:() => shell('cuentas', cr(['Cuentas IBAN']), title('Cuentas IBAN', `${A.length} cuentas. ${fm(crcTotal)} en colones y $1.250,00 en dólares.`, `<span class="btn pri" data-go="cuenta-nueva">${ic('plus')}Nueva cuenta</span>`) + `
+  <div style="display:flex;gap:12px;align-items:center"><div class="in ph" style="width:300px;min-height:34px">${ic('search', ' width="15" height="15"')}IBAN o titular</div><div class="seg"><span class="on">Todas</span><span>CRC</span><span>USD</span></div><div class="in sel" style="min-height:34px;width:170px">Estado: todos</div></div>
+  <div class="block"><table>
+    <thead><tr><th>IBAN</th><th>Titular</th><th>Entidad</th><th>Moneda</th><th class="r">Saldo</th><th>Apertura</th><th class="r">Tel. afiliados</th><th>Estado</th></tr></thead>
+    <tbody>${A.map(a => `<tr class="go" data-go="cuenta-detalle"><td class="b num">${gi(a.i)}</td><td><div class="who">${av(a.c)}${a.c}</div></td><td>${a.en}</td><td>${cur(a.m)}</td>
+      <td class="r b num">${a.m === 'USD' ? '$1.250,00' : fm(a.s)}</td><td>${num(a.f)}</td><td class="r">${num(T.filter(t => t.a === a.i).length)}</td><td>${st(a.st)}</td></tr>`).join('')}</tbody>
+  </table></div>`)},
+
+{id:'cuenta-nueva', name:'Cuentas IBAN · nueva cuenta', html:() => shell('cuentas', cr(['Cuentas IBAN', 'cuentas'], ['Nueva cuenta']), title('Nueva cuenta IBAN', 'La cuenta queda a nombre de un cliente existente.') + `
+  <div class="cols c21">
+    <div class="block"><div class="bb" style="padding-top:20px"><div class="form">
+      ${field('Titular', `${av('Ana Rodríguez Mora')}<span class="b">Ana Rodríguez Mora</span><span class="ink2 num">1-1234-0567</span>`, {sel:1, s2:1})}
+      ${field('Entidad financiera', 'JUNTAUCR', {sel:1})}
+      ${field('Moneda', 'CRC · Colón costarricense', {sel:1})}
+      ${field('IBAN', `<span class="b num">${gi('CR54015200004445556667')}</span><span class="end xs pos num">22 de 22</span>`, {s2:1, st:'ok', hint:'Formato válido y sin registrar.', hk:'ok'})}
+      ${field('Saldo inicial', '<span class="pre">₡</span><span class="num">120.000,00</span>')}
+      ${field('Fecha de apertura', '<span class="num">01/05/2026</span>', {sel:1})}
+      ${field('Estado', 'Activa', {sel:1})}
+      <div></div>
+      <div class="s2" style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px"><span class="btn" data-go="cuentas">Cancelar</span><span class="btn pri" data-go="cuenta-detalle">Registrar cuenta</span></div>
+    </div></div></div>
+    <div class="stack" style="gap:16px">
+      <div class="block"><div class="bh"><h2>Antes de registrar</h2></div><div class="bb checks" style="padding-top:0">
+        ${ck('El titular existe y está activo')}${ck('La entidad está en el catálogo')}${ck('La moneda es CRC o USD')}${ck('El IBAN tiene 22 caracteres y no está repetido')}${ck('El saldo inicial no es negativo')}
+      </div></div>
+      <div class="note warn">${ic('alert')}<div>Solo las cuentas activas en colones pueden recibir afiliaciones de SINPE Móvil.</div></div>
+    </div>
+  </div>`)},
+
+{id:'cuenta-detalle', name:'Cuentas IBAN · detalle (teléfonos asociados)', html:() => shell('cuentas', cr(['Cuentas IBAN', 'cuentas'], [sh(CTA)]), `
+  <div class="title"><div><h1 class="num">${gi(CTA)}</h1><p><span class="who" style="display:inline-flex;gap:8px;vertical-align:middle">${av('Ana Rodríguez Mora')}Ana Rodríguez Mora</span> · JUNTAUCR · abierta ${num('15/03/2026')}</p></div>
+    <div class="act" style="align-items:center">${st('ACTIVA')}<span class="btn">Cambiar estado</span><span class="btn pri" data-go="transferir-iban">${ic('swap')}Transferir</span></div></div>
+  <div class="figs"><div class="fig"><div class="k">Saldo disponible</div><div class="big num">${fm(acc(CTA).s)}</div></div>
+    <div class="fig"><div class="k">Recibido en octubre</div><div class="v num pos">+${fm(recibido)}</div></div>
+    <div class="fig"><div class="k">Enviado en octubre</div><div class="v num">−${fm(enviado)}</div></div></div>
+  <div class="cols c12">
+    <div class="block"><div class="bh"><h2>Teléfonos afiliados</h2><span class="sm ink2">2</span><div class="act"><span class="btn s" data-go="sinpe">${ic('plus')}Afiliar</span></div></div><div class="bb">
+      ${T.filter(t => t.a === CTA).map(t => `<div class="ph-row"><div class="g"><div class="b num">${t.n}</div><div class="xs ink2">desde ${num(t.d)}</div></div><span class="btn s" data-go="sinpe-trasladar">Trasladar</span><span class="btn s neg" data-go="sinpe-desafiliar">Desafiliar</span></div>`).join('')}
+      <div class="xs ink2" style="padding-top:10px">Comparten esta cuenta, así que no pueden transferirse entre sí.</div>
+    </div></div>
+    <div class="block"><div class="bh"><h2>Movimientos recientes</h2><div class="act"><span class="btn q" data-go="movimientos">Ver todos</span></div></div><table><tbody>
+      ${mov.slice().reverse().map(t => { const out = t.o === CTA; const other = acc(out ? t.d : t.o);
+        return `<tr><td class="ink2" style="width:130px">${num(t.dia.slice(0,5) + ' ' + t.h)}</td><td>${out ? 'A' : 'De'} ${num(t.k === 'SINPE' ? (out ? t.pd : t.po) : sh(other.i))} · ${first(other.c)}</td><td class="sm ink2">${t.k === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td><td class="r b num ${out ? '' : 'pos'}">${out ? '−' : '+'}${fm(t.m)}</td></tr>`; }).join('')}
+    </tbody></table></div>
+  </div>`)},
+
+{id:'telefonos', name:'Teléfonos', html:() => shell('telefonos', cr(['Teléfonos']), telefonosBody())},
+
+{id:'telefono-nuevo', name:'Teléfonos · registrar (panel)', html:() => shell('telefonos', cr(['Teléfonos']), telefonosBody(), drawer('Registrar teléfono', `<div class="stack" style="gap:18px">
+  ${field('Número celular', '<span class="b num" style="font-size:16px">8777 6666</span><span class="end xs pos">8 dígitos</span>', {st:'ok', hint:'Debe tener 8 dígitos y no estar registrado.', hk:'ok'})}
+  ${field('Titular', `${av('Ana Rodríguez Mora')}<span class="b">Ana Rodríguez Mora</span><span class="ink2 num">1-1234-0567</span>`, {sel:1})}
+  <div class="note">${ic('info')}<div>El número queda registrado a nombre de Ana, pero sin afiliar. Para recibir SINPE Móvil hay que afiliarlo después.</div></div>
+</div>`, `<span class="btn" data-go="telefonos">Cancelar</span><span class="btn pri" data-go="telefonos">Registrar teléfono</span>`))},
+
+{id:'sinpe', name:'SINPE Móvil · afiliar y afiliaciones vigentes', html:() => shell('sinpe', cr(['SINPE Móvil']), sinpeBody())},
+
+{id:'sinpe-trasladar', name:'SINPE Móvil · trasladar a otra cuenta', html:() => shell('sinpe', cr(['SINPE Móvil']), sinpeBody(), modal('Trasladar 8888-2222', `<div class="stack" style="gap:18px">
+  <p class="ink2">El número pasa a otra cuenta de Ana Rodríguez Mora.</p>
+  <div style="display:grid;grid-template-columns:1fr 40px 1fr;align-items:end;gap:8px">
+    ${field('Cuenta actual', `<span class="num">${gi('CR21015200001234567890')}</span>`)}
+    <div style="height:40px;display:grid;place-items:center;color:var(--accent)">${ic('right', ' width="20" height="20"')}</div>
+    ${field('Nueva cuenta', `<span class="num b">${gi('CR54015200004445556667')}</span>`, {sel:1, st:'foc'})}
+  </div>
+  <div class="note">${ic('lock')}<div>Se desafilia la cuenta actual y se afilia la nueva en un solo paso. Si la nueva afiliación falla, 8888-2222 vuelve a su cuenta actual.</div></div>
+</div>`, `<span class="btn" data-go="sinpe">Cancelar</span><span class="btn pri" data-go="sinpe-historial">Trasladar</span>`))},
+
+{id:'sinpe-desafiliar', name:'SINPE Móvil · desafiliar', html:() => shell('sinpe', cr(['SINPE Móvil']), sinpeBody(), modal('¿Desafiliar 8888-2222?', `<div class="stack" style="gap:14px">
+  <p>Dejará de recibir transferencias SINPE Móvil en <b class="num">${gi('CR21015200001234567890')}</b>.</p>
+  <p class="ink2">El número sigue registrado a nombre de Ana Rodríguez Mora y su historial se conserva.</p>
+</div>`, `<span class="btn" data-go="sinpe">Cancelar</span><span class="btn negf" data-go="sinpe-historial">Desafiliar</span>`))},
+
+{id:'sinpe-historial', name:'SINPE Móvil · historial de un teléfono', html:() => shell('sinpe', cr(['SINPE Móvil', 'sinpe'], ['Historial de 8888-1111']), title('Historial de 8888-1111', 'Cada afiliación y desafiliación se registra sola. Un traslado deja dos eventos con la misma hora.', `<span class="btn">${ic('dl')}Exportar</span>`) + `
+  <div class="cols c12">
+    <div class="block"><div class="bb" style="padding-top:20px">
+      ${field('Teléfono', '<span class="b num">8888-1111</span>', {sel:1})}
+      <div style="margin-top:12px"><div class="kv"><span>Titular</span><span class="who" style="gap:8px">${av('Ana Rodríguez Mora')}Ana Rodríguez Mora</span></div>
+      <div class="kv"><span>Estado</span>${af(1)}</div>
+      <div class="kv"><span>Cuenta vigente</span><b class="num">${sh(CTA)}</b></div>
+      <div class="kv"><span>Desde</span><b class="num">20/07/2026</b></div>
+      <div class="kv"><span>Eventos</span><b class="num">5</b></div></div>
+    </div></div>
+    <div class="block"><div class="bh"><h2>Eventos</h2><div class="act"><span class="sm ink2">Del más antiguo al más reciente</span></div></div><table>
+      <thead><tr><th>Fecha</th><th>Evento</th><th>Cuenta</th><th>Motivo</th></tr></thead><tbody>
+      ${[['15/03/2026 09:12', 'AFILIACION', 'CR21015200001234567890', 'Afiliación inicial'],
+         ['02/05/2026 14:30', 'DESAFILIACION', 'CR21015200001234567890', 'Traslado'],
+         ['02/05/2026 14:30', 'AFILIACION', 'CR54015200004445556667', 'Traslado'],
+         ['20/07/2026 11:05', 'DESAFILIACION', 'CR54015200004445556667', 'Traslado'],
+         ['20/07/2026 11:05', 'AFILIACION', 'CR21015200001234567890', 'Traslado, vigente']]
+        .map(([f, e, c, n]) => `<tr><td>${num(f)}</td><td>${e === 'AFILIACION' ? '<span class="st ok">Afiliación</span>' : '<span class="st bad">Desafiliación</span>'}</td><td class="num">${gi(c)}</td><td class="ink2">${n}</td></tr>`).join('')}
+    </tbody></table></div>
+  </div>`)},
+
+{id:'transferir-tel', name:'Transferir · por teléfono (SINPE Móvil)', html:() => shell('transferir-tel', cr(['Transferir']), title('Transferir', 'El dinero sale y entra en un mismo paso. Si algo falla, no se mueve nada.') + transferTabs('tel') + `
+  <div class="cols c2">
+    <div class="block"><div class="bb stack" style="gap:18px;padding-top:20px">
+      ${field('Desde', `<span class="b num">8888-1111</span><span class="ink2">Ana Rodríguez Mora</span><span class="end sm ink2 num">${fm(850000)}</span>`, {sel:1})}
+      ${field('Para', '<span class="b num">8888 3333</span>', {st:'foc', hint:'Carlos Jiménez Solís · Banco Volcán', hk:'ok'})}
+      <div class="form">${field('Monto', '<span class="pre">₡</span><span class="b num">25.000,00</span>')}${field('Detalle', 'Almuerzo viernes')}</div>
+      <span class="btn pri l" data-go="transferir-confirmar">Revisar transferencia</span>
+    </div></div>
+    <div class="block" style="background:var(--sub);border-color:transparent"><div class="bb" style="padding-top:24px">
+      <div class="sm ink2 b" style="margin-bottom:14px">Así sale el dinero</div>
+      ${pair(['8888-1111', 'Ana R. · ' + sh(CTA)], ['8888-3333', 'Carlos J. · ' + sh('CR63081400005551112223')], fm(25000), 'lg live sub')}
+      <div class="checks" style="margin-top:20px">
+        ${ck('Los dos números están afiliados')}${ck('Las cuentas están activas y en colones')}${ck('Son cuentas distintas')}${ck('Hay saldo suficiente: quedan ' + fm(825000))}
+      </div>
+    </div></div>
+  </div>`)},
+
+{id:'transferir-iban', name:'Transferir · por IBAN', html:() => shell('transferir-tel', cr(['Transferir']), title('Transferir', 'El dinero sale y entra en un mismo paso. Si algo falla, no se mueve nada.') + transferTabs('iban') + `
+  <div class="cols c2">
+    <div class="block"><div class="bb stack" style="gap:18px;padding-top:20px">
+      ${field('Desde', `<span class="b num">${gi(CTA)}</span><span class="end sm ink2 num">${fm(850000)}</span>`, {sel:1, hint:'Ana Rodríguez Mora · CRC'})}
+      ${field('Para', `<span class="b num">${gi('CR88090100007778889990')}</span><span class="end xs pos num">22 de 22</span>`, {st:'foc', hint:'María Fernández Vargas · Cooperativa Arenal · CRC', hk:'ok'})}
+      <div class="form">${field('Monto', '<span class="pre">₡</span><span class="b num">40.000,00</span>')}${field('Detalle', 'Pago alquiler')}</div>
+      <span class="btn pri l" data-go="transferir-confirmar">Revisar transferencia</span>
+    </div></div>
+    <div class="block" style="background:var(--sub);border-color:transparent"><div class="bb" style="padding-top:24px">
+      <div class="sm ink2 b" style="margin-bottom:14px">Así sale el dinero</div>
+      ${pair([sh(CTA), 'Ana R. · CRC'], [sh('CR88090100007778889990'), 'María F. · CRC'], fm(40000), 'lg live sub')}
+      <div class="checks" style="margin-top:20px">
+        ${ck('Las dos cuentas están activas')}${ck('Las dos son en colones')}${ck('Son cuentas distintas')}${ck('Hay saldo suficiente: quedan ' + fm(810000))}
+      </div>
+    </div></div>
+  </div>`)},
+
+{id:'transferir-confirmar', name:'Transferir · confirmar', html:() => shell('transferir-tel', cr(['Transferir', 'transferir-tel'], ['Confirmar']), `
+  <div style="width:680px;margin:12px auto 0" class="stack">
+    <h1 style="font-size:24px;letter-spacing:-.02em;font-weight:600">Confirma la transferencia</h1>
+    <div class="block" style="margin-top:12px"><div class="bb" style="padding-top:28px">
+      <div class="ink2 sm">Monto</div><div class="huge num">${fm(25000)}</div>
+      <div style="margin:28px 0 8px">${pair(['8888-1111', 'Ana Rodríguez Mora'], ['8888-3333', 'Carlos Jiménez Solís'], 'SINPE Móvil', 'lg')}</div>
+      <div class="kv"><span>Cuenta de origen</span><span class="num">${gi(CTA)}</span></div>
+      <div class="kv"><span>Cuenta de destino</span><span class="num">${gi('CR63081400005551112223')} · Banco Volcán</span></div>
+      <div class="kv"><span>Detalle</span><span>Almuerzo viernes</span></div>
+      <div class="kv"><span>Saldo después</span><b class="num">${fm(825000)}</b></div>
+    </div><div class="mf"><span class="btn" data-go="transferir-tel">Volver</span><span class="btn" data-go="transferir-error">Probar un rechazo</span><span class="btn pri" data-go="transferir-exito">Transferir ${fm(25000)}</span></div></div>
+  </div>`)},
+
+{id:'transferir-exito', name:'Transferir · enviada (comprobante)', html:() => shell('transferir-tel', cr(['Transferir', 'transferir-tel'], ['Comprobante']), `
+  <div style="width:680px;margin:12px auto 0" class="stack">
+    <div style="display:flex;align-items:center;gap:12px"><span style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center">${ic('check', ' width="20" height="20" stroke-width="2.2"')}</span><h1 style="font-size:24px;letter-spacing:-.02em;font-weight:600">Transferencia enviada</h1></div>
+    <div class="block" style="margin-top:12px"><div class="bb" style="padding-top:28px">
+      <div class="huge num">${fm(25000)}</div>
+      <div style="margin:28px 0 8px">${pair(['8888-1111', 'Ana Rodríguez Mora'], ['8888-3333', 'Carlos Jiménez Solís'], 'SINPE Móvil', 'lg live')}</div>
+      <div class="kv"><span>Comprobante</span><b class="num">TRF-000129</b></div>
+      <div class="kv"><span>Fecha</span><span class="num">31/10/2026 11:08</span></div>
+      <div class="kv"><span>Detalle</span><span>Almuerzo viernes</span></div>
+      <div class="kv"><span>Saldo de Ana</span><b class="num">${fm(825000)}</b></div>
+    </div><div class="mf"><span class="btn">${ic('dl')}Descargar</span><span class="btn" data-go="movimientos">Ver movimientos</span><span class="btn pri" data-go="transferir-tel">Nueva transferencia</span></div></div>
+  </div>`)},
+
+{id:'transferir-error', name:'Transferir · rechazada', html:() => shell('transferir-tel', cr(['Transferir', 'transferir-tel'], ['Rechazada']), `
+  <div style="width:680px;margin:12px auto 0" class="stack">
+    <div style="display:flex;align-items:center;gap:12px"><span style="width:36px;height:36px;border-radius:50%;background:var(--neg);color:#fff;display:grid;place-items:center">${ic('x', ' width="20" height="20" stroke-width="2.2"')}</span><h1 style="font-size:24px;letter-spacing:-.02em;font-weight:600">No se hizo la transferencia</h1></div>
+    <p class="ink2">Los dos números están afiliados a la misma cuenta, y una cuenta no puede transferirse a sí misma. No se movió ningún colón.</p>
+    <div class="block" style="margin-top:12px"><div class="bb" style="padding-top:28px">
+      <div class="vee">
+        <svg viewBox="0 0 560 150" fill="none" aria-hidden="true"><path d="M150 26 L262 112" stroke="#B3261E" stroke-width="2" stroke-dasharray="5 5"/><path d="M410 26 L298 112" stroke="#B3261E" stroke-width="2" stroke-dasharray="5 5"/><circle cx="280" cy="64" r="13" fill="#FBEAE8"/><path d="M275 59l10 10M285 59l-10 10" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="a"><div class="b num" style="font-size:20px">8888-1111</div><div class="xs ink2">origen</div></div>
+        <div class="b2"><div class="b num" style="font-size:20px">8888-2222</div><div class="xs ink2">destino</div></div>
+        <div class="c3"><div class="b num">${gi(CTA)}</div><div class="xs ink2">la misma cuenta de Ana</div></div>
+      </div>
+      <div class="kv" style="margin-top:20px"><span>Monto</span><b class="num">${fm(10000)}</b></div>
+      <div class="kv"><span>Saldo de Ana</span><span class="num">${fm(850000)}, sin cambios</span></div>
+      <div class="kv"><span>Código</span><span class="num">45000</span></div>
+    </div><div class="mf"><span class="btn" data-go="dashboard">Ir al inicio</span><span class="btn pri" data-go="transferir-tel">Cambiar el destino</span></div></div>
+  </div>`)},
+
+{id:'movimientos', name:'Movimientos y reportes', html:() => { let saldo = inicio[CTA]; return shell('movimientos', cr(['Movimientos']), title('Movimientos', 'Lo enviado y recibido por una cuenta en un período, con su saldo después de cada movimiento.', `<span class="btn">${ic('dl')}Exportar</span>`) + `
+  <div style="display:grid;grid-template-columns:2.2fr 1fr 1fr auto;gap:12px;align-items:end">
+    ${field('Cuenta', `<span class="b num">${gi(CTA)}</span><span class="ink2">Ana R.</span>`, {sel:1})}
+    ${field('Desde', '<span class="num">01/10/2026</span>', {sel:1})}${field('Hasta', '<span class="num">31/10/2026</span>', {sel:1})}
+    <span class="btn pri" style="height:40px">Consultar</span>
+  </div>
+  <div class="figs">
+    <div class="fig"><div class="k">Saldo al 1 de octubre</div><div class="v num">${fm(inicio[CTA])}</div></div>
+    <div class="fig"><div class="k">Enviado</div><div class="v num">−${fm(enviado)}</div><div class="n">${mov.filter(t => t.o === CTA).length} transferencias</div></div>
+    <div class="fig"><div class="k">Recibido</div><div class="v num pos">+${fm(recibido)}</div><div class="n">${mov.filter(t => t.d === CTA).length} transferencias</div></div>
+    <div class="fig"><div class="k">Saldo al 31 de octubre</div><div class="big num">${fm(acc(CTA).s)}</div></div>
+  </div>
+  <div class="block"><table>
+    <thead><tr><th>Fecha</th><th>Comprobante</th><th>Contraparte</th><th>Canal</th><th>Detalle</th><th class="r">Enviado</th><th class="r">Recibido</th><th class="r">Saldo</th></tr></thead>
+    <tbody>${mov.map(t => { const out = t.o === CTA; const other = acc(out ? t.d : t.o); saldo += out ? -t.m : t.m;
+      return `<tr><td>${num(t.dia + ' ' + t.h)}</td><td class="ink2">${num(t.id)}</td><td><div class="who">${av(other.c)}<div><div>${first(other.c)}</div><div class="xs ink2 num">${t.k === 'SINPE' ? (out ? t.pd : t.po) : sh(other.i)}</div></div></div></td>
+        <td class="ink2">${t.k === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td><td class="ink2">${t.t}</td><td class="r num">${out ? fm(t.m) : ''}</td><td class="r num pos">${out ? '' : fm(t.m)}</td><td class="r b num">${fm(saldo)}</td></tr>`; }).join('')}</tbody>
+  </table></div>
+  <div class="block"><div class="bh"><h2>El dinero no se crea ni se pierde</h2><div class="act"><span class="st ok">${fm(sumIni)} antes y después</span></div></div><table>
+    <thead><tr><th>Cuenta</th><th>Titular</th><th class="r">Saldo inicial</th><th class="r">Enviado</th><th class="r">Recibido</th><th class="r">Saldo final</th></tr></thead>
+    <tbody>${part.map(i => { const a = acc(i); const e = TR.filter(t => t.o === i).reduce((s, t) => s + t.m, 0), r = TR.filter(t => t.d === i).reduce((s, t) => s + t.m, 0);
+      return `<tr><td class="num">${gi(i)}</td><td><div class="who">${av(a.c)}${a.c}</div></td><td class="r num">${fm(inicio[i])}</td><td class="r num">${fm(e)}</td><td class="r num">${fm(r)}</td><td class="r b num">${fm(a.s)}</td></tr>`; }).join('')}</tbody>
+    <tfoot><tr><td>Total</td><td></td><td class="r num">${fm(sumIni)}</td><td class="r num">${fm(TR.reduce((s, t) => s + t.m, 0))}</td><td class="r num">${fm(TR.reduce((s, t) => s + t.m, 0))}</td><td class="r num">${fm(sumFin)}</td></tr></tfoot>
+  </table></div>`); }},
+
+{id:'catalogos', name:'Catálogos · entidades y monedas', html:() => shell('catalogos', cr(['Catálogos']), title('Catálogos', 'Las cuentas guardan solo la referencia a su entidad y a su moneda.') + `
+  <div class="cols c2">
+    <div class="block"><div class="bh"><h2>Entidades financieras</h2><div class="act"><span class="btn s">${ic('plus')}Agregar</span></div></div><table>
+      <thead><tr><th>Código</th><th>Nombre</th><th class="r">Cuentas</th><th></th></tr></thead><tbody>
+      ${[['0152', 'JUNTAUCR'], ['0814', 'Banco Volcán'], ['0901', 'Cooperativa Arenal'], ['0733', 'Financiera Poás']].map(([c, n]) => `<tr><td class="num ink2">${c}</td><td class="b">${n}</td><td class="r num">${A.filter(a => a.en === n).length}</td><td class="r"><span class="btn s">Editar</span></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="block"><div class="bh"><h2>Monedas</h2></div><table>
+      <thead><tr><th>Código</th><th>Descripción</th><th>Símbolo</th><th class="r">Cuentas</th></tr></thead><tbody>
+      <tr><td>${cur('CRC')}</td><td class="b">Colón costarricense</td><td>₡</td><td class="r num">${A.filter(a => a.m === 'CRC').length}</td></tr>
+      <tr><td>${cur('USD')}</td><td class="b">Dólar estadounidense</td><td>$</td><td class="r num">${A.filter(a => a.m === 'USD').length}</td></tr>
+    </tbody></table><div class="bb" style="padding-top:12px"><div class="note">${ic('info')}<div>Solo las cuentas en colones pueden afiliarse a SINPE Móvil.</div></div></div></div>
+  </div>`)}
+];
+
+/* ---------- render ---------- */
+const q = new URLSearchParams(location.search);
+const app = document.getElementById('app');
+const frame = s => `<div class="frame" id="f-${s.id}">${s.html()}</div>`;
+
+if (q.get('pantalla')) {
+  const s = SCREENS.find(x => x.id === q.get('pantalla')) || SCREENS[0];
+  document.body.style.background = 'var(--frame)';
+  app.innerHTML = frame(s);
+  app.firstElementChild.style.minHeight = '100vh';
+} else if (q.get('modo') === 'demo') {
+  document.body.classList.add('motion');
+  const show = () => {
+    const s = SCREENS.find(x => x.id === location.hash.slice(1)) || SCREENS[0];
+    app.innerHTML = `<div class="demo">${frame(s)}</div><div class="demo-bar">${s.name}<a href="?">Ver todas</a></div>`;
+    window.scrollTo(0, 0);
+  };
+  window.addEventListener('hashchange', show);
+  app.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) location.hash = g.dataset.go; });
+  show();
+} else {
+  app.innerHTML = `<div class="canvas">
+    <div class="canvas-head"><h1>JUNTAUCR · Operaciones SINPE</h1>
+      <p>${SCREENS.length} pantallas de 1440 px con datos ficticios. <a href="?modo=demo">Abrir el prototipo navegable</a></p></div>
+    ${SCREENS.map(s => `<div><div class="label">${s.name}</div>${frame(s)}</div>`).join('')}
+  </div>`;
+  app.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) document.getElementById('f-' + g.dataset.go)?.scrollIntoView({behavior:'smooth', block:'start'}); });
+}
+</script>
+</body>
+</html>
