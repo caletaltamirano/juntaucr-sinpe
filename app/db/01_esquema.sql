@@ -144,7 +144,9 @@ CREATE TABLE transferencia (
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
--- Usuarios de la aplicación (operadores). Contraseña con hash SHA-256 + sal.
+-- Usuarios de la aplicación. Contraseña con hash SHA-256 + sal.
+--   ADMIN   = administración de JUNTAUCR (id_cliente NULL, ve todas las entidades).
+--   CLIENTE = una persona cliente; ingresa eligiendo una entidad en la que tenga cuentas.
 -- ---------------------------------------------------------------------
 CREATE TABLE usuario (
   id_usuario  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -152,5 +154,10 @@ CREATE TABLE usuario (
   nombre      VARCHAR(80)  NOT NULL,
   sal         CHAR(16)     NOT NULL,
   clave_hash  CHAR(64)     NOT NULL,
-  CONSTRAINT uq_usuario_correo UNIQUE (correo)
+  rol         ENUM('ADMIN','CLIENTE') NOT NULL DEFAULT 'CLIENTE',
+  id_cliente  INT UNSIGNED NULL,
+  CONSTRAINT uq_usuario_correo  UNIQUE (correo),
+  CONSTRAINT uq_usuario_cliente UNIQUE (id_cliente),
+  CONSTRAINT ck_usuario_rol     CHECK ((rol = 'ADMIN' AND id_cliente IS NULL) OR (rol = 'CLIENTE' AND id_cliente IS NOT NULL)),
+  CONSTRAINT fk_usuario_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente)
 ) ENGINE = InnoDB;

@@ -5,10 +5,25 @@
   --ink:#0F231C; --ink-2:#4A5E56; --ink-3:#62756D;
   --accent:#0E6A52; --accent-hi:#0B5945; --accent-pale:#E0EFE8;
   --neg:#B3261E; --neg-pale:#FBEAE8; --warn:#865600; --warn-pale:#FAF0DA;
+  --bg:#C9D3CE;
   --ease-out:cubic-bezier(.23,1,.32,1);
 }
+/* Paleta por entidad financiera (el atributo data-entidad lo pone app.js según la entidad elegida).
+   JUNTAUCR y la administración usan los verdes por defecto de :root. */
+html[data-entidad="0814"]{ /* Banco Volcán · naranja */
+  --frame:#F1E7DF; --frame-hi:#E7D6C9; --sub:#FAF6F2; --line:#EBE0D7; --line-2:#D8C7B9; --bg:#D9CABF;
+  --accent:#B8500A; --accent-hi:#9A4208; --accent-pale:#FCEBDD;
+}
+html[data-entidad="0901"]{ /* Cooperativa Arenal · azul */
+  --frame:#E0E8F1; --frame-hi:#D0DCE9; --sub:#F3F6FA; --line:#E0E7EF; --line-2:#C6D3E1; --bg:#C3CFDC;
+  --accent:#1F5FA8; --accent-hi:#194C87; --accent-pale:#E3EDF9;
+}
+html[data-entidad="0733"]{ /* Financiera Poás · morado */
+  --frame:#E9E3F0; --frame-hi:#DCD2E7; --sub:#F7F4FA; --line:#E6DFED; --line-2:#D2C7DE; --bg:#D0C7DB;
+  --accent:#6B3FA0; --accent-hi:#56327F; --accent-pale:#EEE6F7;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);background:#C9D3CE;font-size:14px;line-height:1.5;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+body{font-family:'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 ::selection{background:var(--accent-pale);color:var(--ink)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap}

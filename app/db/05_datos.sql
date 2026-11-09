@@ -17,16 +17,17 @@ INSERT INTO entidad_financiera (codigo, nombre) VALUES
   ('0901', 'Cooperativa Arenal'),
   ('0733', 'Financiera Poás');
 
+-- Administración (ve todas las entidades). Los clientes de prueba reciben la clave juntaucr2026 al registrarse.
 -- Operador de la aplicación: admin@juntaucr.cr / juntaucr2026
-INSERT INTO usuario (correo, nombre, sal, clave_hash) VALUES
-  ('admin@juntaucr.cr', 'Admin Operaciones', 'a1b2c3d4e5f60718', SHA2(CONCAT('a1b2c3d4e5f60718', 'juntaucr2026'), 256));
+INSERT INTO usuario (correo, nombre, sal, clave_hash, rol) VALUES
+  ('admin@juntaucr.cr', 'Admin Operaciones', 'a1b2c3d4e5f60718', SHA2(CONCAT('a1b2c3d4e5f60718', 'juntaucr2026'), 256), 'ADMIN');
 
 -- Clientes
-CALL sp_registrar_cliente('1-1234-0567', 'Ana Rodríguez Mora',     'ana.rodriguez@correo.cr', @c);
-CALL sp_registrar_cliente('2-0456-0789', 'Carlos Jiménez Solís',   'cjimenez@correo.cr',      @c);
-CALL sp_registrar_cliente('1-0987-0654', 'María Fernández Vargas', 'maria.fv@correo.cr',      @c);
-CALL sp_registrar_cliente('3-0321-0111', 'José Ramírez Castro',    'jramirez@correo.cr',      @c);
-CALL sp_registrar_cliente('1-1111-0222', 'Laura Chaves Quesada',   'laura.chaves@correo.cr',  @c);
+CALL sp_registrar_cliente('1-1234-0567', 'Ana Rodríguez Mora',     'ana.rodriguez@correo.cr', 'juntaucr2026', @c);
+CALL sp_registrar_cliente('2-0456-0789', 'Carlos Jiménez Solís',   'cjimenez@correo.cr', 'juntaucr2026', @c);
+CALL sp_registrar_cliente('1-0987-0654', 'María Fernández Vargas', 'maria.fv@correo.cr', 'juntaucr2026', @c);
+CALL sp_registrar_cliente('3-0321-0111', 'José Ramírez Castro',    'jramirez@correo.cr', 'juntaucr2026', @c);
+CALL sp_registrar_cliente('1-1111-0222', 'Laura Chaves Quesada',   'laura.chaves@correo.cr', 'juntaucr2026', @c);
 
 -- Cuentas IBAN (saldos iniciales, antes de las transferencias del escenario)
 CALL sp_registrar_cuenta('CR21015200001234567890', '1-1234-0567', '0152', 'CRC',  772500.00, '2026-03-15', 'ACTIVA',    @a);  -- "IBAN 001"

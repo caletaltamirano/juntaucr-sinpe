@@ -43,7 +43,8 @@ SELECT cl.id_cliente, cl.identificacion, cl.nombre_completo AS titular, cl.estad
        t.id_telefono, t.numero, t.fecha_registro,
        IF(a.id_afiliacion IS NULL, 'NO', 'SI') AS afiliado,
        c.iban  AS iban_afiliado,
-       a.fecha_afiliacion
+       a.fecha_afiliacion,
+       c.id_entidad AS id_entidad_afiliada
   FROM telefono t
   JOIN cliente cl ON cl.id_cliente = t.id_cliente
   LEFT JOIN afiliacion_sinpe a ON a.id_telefono = t.id_telefono

@@ -22,8 +22,17 @@ CREATE PROCEDURE sp_registrar_cliente(
   IN  p_identificacion VARCHAR(20),
   IN  p_nombre         VARCHAR(120),
   IN  p_correo         VARCHAR(120),
+  IN  p_clave          VARCHAR(60),
   OUT p_id_cliente     INT UNSIGNED)
 BEGIN
+  DECLARE v_sal CHAR(16);
+
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
   SET p_identificacion = TRIM(p_identificacion);
   SET p_nombre = TRIM(p_nombre);
   SET p_correo = LOWER(TRIM(p_correo));
@@ -37,16 +46,29 @@ BEGIN
   IF p_correo IS NULL OR p_correo NOT LIKE '%_@_%._%' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El correo electrónico no es válido.';
   END IF;
+  IF p_clave IS NULL OR CHAR_LENGTH(p_clave) < 6 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La clave inicial debe tener al menos 6 caracteres.';
+  END IF;
   IF EXISTS (SELECT 1 FROM cliente WHERE identificacion = p_identificacion) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un cliente con esa identificación.';
   END IF;
-  IF EXISTS (SELECT 1 FROM cliente WHERE correo = p_correo) THEN
+  IF EXISTS (SELECT 1 FROM cliente WHERE correo = p_correo)
+     OR EXISTS (SELECT 1 FROM usuario WHERE correo = p_correo) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un cliente con ese correo.';
   END IF;
+
+  START TRANSACTION;
 
   INSERT INTO cliente (identificacion, nombre_completo, correo)
   VALUES (p_identificacion, p_nombre, p_correo);
   SET p_id_cliente = LAST_INSERT_ID();
+
+  -- Credenciales de ingreso del cliente (la administración entrega la clave inicial)
+  SET v_sal = SUBSTRING(SHA2(CONCAT(RAND(), UUID()), 256), 1, 16);
+  INSERT INTO usuario (correo, nombre, sal, clave_hash, rol, id_cliente)
+  VALUES (p_correo, p_nombre, v_sal, SHA2(CONCAT(v_sal, p_clave), 256), 'CLIENTE', p_id_cliente);
+
+  COMMIT;
 END$$
 
 -- ---------------------------------------------------------------------

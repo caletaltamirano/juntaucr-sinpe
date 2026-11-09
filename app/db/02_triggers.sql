@@ -177,4 +177,13 @@ BEGIN
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Una transferencia confirmada no se puede borrar.';
 END$$
 
+-- Si cambia el correo o el nombre del cliente, su usuario de ingreso se mantiene al día.
+CREATE TRIGGER trg_cliente_sincronizar_usuario_au
+AFTER UPDATE ON cliente
+FOR EACH ROW
+BEGIN
+  UPDATE usuario SET correo = NEW.correo, nombre = NEW.nombre_completo
+   WHERE id_cliente = NEW.id_cliente;
+END$$
+
 DELIMITER ;

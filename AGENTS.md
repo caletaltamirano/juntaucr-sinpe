@@ -75,7 +75,9 @@ npm run pruebas-bd            # reinstala y ejecuta 06_pruebas.sql (tabla PASA/F
 npm start                     # http://localhost:3100
 ```
 
-Usuario: `admin@juntaucr.cr` / `juntaucr2026`
+Ingreso (una sola pantalla, se elige la entidad financiera):
+- **Administración:** entidad «Administración JUNTAUCR», `admin@juntaucr.cr` / `juntaucr2026`. Crea clientes (con clave inicial), cuentas IBAN, teléfonos, catálogos y cambia estados. Ve todas las entidades.
+- **Cliente:** elige su entidad y entra con su correo y `juntaucr2026`, p. ej. `ana.rodriguez@correo.cr` (JUNTAUCR) o `cjimenez@correo.cr` (Banco Volcán). Solo ve y opera lo suyo dentro de esa entidad: afiliar/desafiliar/trasladar SINPE, registrar teléfono, transferir (a cualquier entidad) y ver movimientos. Si no tiene cuentas en la entidad elegida, no entra.
 
 Detalles del entorno que ya causaron problemas:
 - **Use `DB_HOST=127.0.0.1`**, no `localhost`: en Windows el controlador `mysql2` intenta IPv6 y la conexión se queda colgada sin error.
@@ -120,11 +122,14 @@ app/
     `.pair` (el "par SINPE" origen → monto → destino), `.st` (estado con punto) y `.note`.
     No use píldoras, encabezados en mayúscula ni tarjetas con íconos.
 
+11. **Roles:** `usuario.rol` es `ADMIN` o `CLIENTE` (con `id_cliente`). `sp_registrar_cliente` recibe la clave inicial y crea también el usuario. En `server.js`, `soloAdmin`, `exigirCuentaPropia` y `exigirTelefonoPropio` solo limitan QUIÉN pide cada operación; las reglas de negocio siguen en MySQL. La sesión del cliente guarda la entidad elegida. «Por teléfono» elige la cuenta de origen y el teléfono se deduce de sus afiliaciones.
+12. **Paleta por entidad:** `styles.css` define `html[data-entidad="0814"|"0901"|"0733"]` (naranja, azul, morado); JUNTAUCR y la administración usan el verde de `:root`. `setTema()` en `app.js` pone el atributo según la entidad de la sesión. Use siempre `var(--accent)` y compañía, nunca colores fijos. El título del menú lateral es el nombre de la entidad.
+
 **Rutas de la interfaz (hash):** `#/inicio`, `#/clientes`, `#/clientes/:id`, `#/cuentas`, `#/cuentas/nueva`,
 `#/cuentas/:iban`, `#/telefonos`, `#/sinpe`, `#/sinpe/historial/:numero`, `#/transferir`, `#/transferir/iban`,
 `#/transferir/confirmar`, `#/transferir/resultado`, `#/movimientos`, `#/catalogos`, `#/login`.
 
-**API principal:** `/api/login`, `/api/resumen`, `/api/clientes`, `/api/cuentas`, `/api/cuentas/:iban/estado`,
+**API principal:** `/api/entidades-login`, `/api/login`, `/api/mis-movimientos`, `/api/resumen`, `/api/clientes`, `/api/cuentas`, `/api/cuentas/:iban/estado`,
 `/api/telefonos`, `/api/telefonos/:numero/titular`, `/api/sinpe/{afiliar,desafiliar,trasladar,historial/:n}`,
 `/api/transferencias/{sinpe,iban}`, `/api/movimientos`, `/api/conservacion`, `/api/catalogos`, `/api/entidades`,
 `/api/buscar/{telefono,iban}/:x`.
@@ -157,7 +162,7 @@ Opcionales:
 - [ ] Los datos de prueba se crean con la fecha de instalación. Para un historial repartido en varios días, se podría
   agregar una variable de sesión `@fecha_simulada` que los procedimientos usen en lugar de `NOW()` solo durante la carga.
 - [ ] Desplegar en internet (por ejemplo Railway o Render con MySQL administrado) si el profesor quiere verlo en línea.
-- [ ] Más usuarios o roles (hoy hay un único operador, con sesión en memoria que se pierde al reiniciar el servidor).
+- [ ] Cambio de clave por el cliente y recuperación de contraseña (hoy la sesión está en memoria y se pierde al reiniciar el servidor).
 - [ ] Exportar el comprobante de transferencia (el botón "Descargar" del prototipo no se implementó; sí hay
   exportación CSV en Movimientos y en Historial).
 

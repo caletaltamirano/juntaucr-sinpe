@@ -24,7 +24,7 @@ const P = {
   out:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9'
 };
 const ic = (n, s = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"${s}><path d="${P[n]}"/></svg>`;
-const MARK = (s = 28) => `<svg width="${s}" height="${s}" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#0E6A52"/><circle cx="8.5" cy="14" r="3.2" fill="#fff"/><circle cx="19.5" cy="14" r="3.2" fill="#fff"/><path d="M11.7 14h4.6" stroke="#fff" stroke-width="2.2"/></svg>`;
+const MARK = (s = 28) => `<svg width="${s}" height="${s}" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" style="fill:var(--accent)"/><circle cx="8.5" cy="14" r="3.2" fill="#fff"/><circle cx="19.5" cy="14" r="3.2" fill="#fff"/><path d="M11.7 14h4.6" stroke="#fff" stroke-width="2.2"/></svg>`;
 
 /* ---------- formato ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -60,6 +60,9 @@ const GET = u => api('GET', u), POST = (u, b) => api('POST', u, b || {}), PUT = 
 
 /* ---------- estado, navegación, avisos ---------- */
 const estado = {usuario: null, transferencia: null, resultado: null};
+const esAdmin = () => estado.usuario?.rol === 'ADMIN';
+// Paleta por entidad: el CSS reacciona al atributo data-entidad (vacío = verde de JUNTAUCR)
+const setTema = codigo => { if (codigo) document.documentElement.dataset.entidad = codigo; else delete document.documentElement.dataset.entidad; };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const ir = ruta => { if (location.hash === '#' + ruta) render(); else location.hash = ruta; };
@@ -100,21 +103,27 @@ const nota = (k, html, i) => `<div class="note ${k}">${ic(i || (k === 'bad' ? 'a
 const ck = (t, bad, pend) => `<div class="ck${bad ? ' x' : ''}"${pend ? ' style="opacity:.5"' : ''}>${ic(bad ? 'x' : 'check')}<div>${t}</div></div>`;
 
 /* ---------- piezas de interfaz ---------- */
-const NAV = [
+const NAV_ADMIN = [
   ['Operación', [['inicio','Inicio','home'], ['transferir','Transferir','swap'], ['movimientos','Movimientos','list']]],
   ['Registro', [['clientes','Clientes','users'], ['cuentas','Cuentas IBAN','card'], ['telefonos','Teléfonos','phone'], ['sinpe','SINPE Móvil','link']]],
   ['Sistema', [['catalogos','Catálogos','db']]]
 ];
+const NAV_CLIENTE = [
+  ['Operación', [['inicio','Inicio','home'], ['transferir','Transferir','swap'], ['movimientos','Movimientos','list']]],
+  ['Mi información', [['cuentas','Mis cuentas','card'], ['telefonos','Mis teléfonos','phone'], ['sinpe','SINPE Móvil','link']]]
+];
+// Rutas que solo puede abrir la administración
+const SOLO_ADMIN = ['clientes', 'cliente', 'cuentaNueva', 'catalogos'];
 const shell = (activo, migas, cuerpo) => `<div class="frame">
   <aside class="side">
-    <div class="ws">${MARK()}<div><div class="t">JUNTAUCR</div><div class="s">Operaciones SINPE</div></div></div>
-    ${NAV.map(([g, items]) => `<div class="grp">${g}</div>${items.map(([id, t, i]) => `<a class="nav${id === activo ? ' on' : ''}" href="#/${id}">${ic(i)}${t}</a>`).join('')}`).join('')}
+    <div class="ws">${MARK()}<div><div class="t">${esAdmin() ? 'JUNTAUCR' : esc(estado.usuario?.entidad)}</div>${esAdmin() ? '<div class="s">Administración SINPE</div>' : ''}</div></div>
+    ${(esAdmin() ? NAV_ADMIN : NAV_CLIENTE).map(([g, items]) => `<div class="grp">${g}</div>${items.map(([id, t, i]) => `<a class="nav${id === activo ? ' on' : ''}" href="#/${id}">${ic(i)}${t}</a>`).join('')}`).join('')}
     <div class="me"><span class="av" style="background:#fff;color:var(--accent)">${esc(ini(estado.usuario?.nombre || 'AO'))}</span><div style="min-width:0;flex:1"><div class="t">${esc(estado.usuario?.nombre)}</div><div class="s">${esc(estado.usuario?.correo)}</div></div>
       <button class="btn s q" id="salir" title="Salir" aria-label="Salir">${ic('out')}</button></div>
   </aside>
   <header class="top">
     <div class="crumbs">${migas}</div>
-    <form class="search" id="buscar" role="search">${ic('search')}<input aria-label="Buscar" placeholder="Buscar cliente, IBAN o teléfono" style="border:0;background:transparent;font:inherit;flex:1;outline:none;color:var(--ink)"><span class="kbd">Enter</span></form>
+    <form class="search" id="buscar" role="search"${esAdmin() ? '' : ' style="visibility:hidden"'}>${ic('search')}<input aria-label="Buscar" placeholder="Buscar cliente, IBAN o teléfono" style="border:0;background:transparent;font:inherit;flex:1;outline:none;color:var(--ink)"><span class="kbd">Enter</span></form>
     <div class="envt"><i></i>Simulación · datos ficticios</div>
   </header>
   <main class="sheet"><div class="content" id="contenido">${cuerpo}</div></main></div>`;
@@ -134,27 +143,60 @@ const opts = (lista, val, txt, sel) => lista.map(x => `<option value="${esc(val(
 const R = {};
 
 /* ---------- ingreso ---------- */
-R.login = () => {
+R.login = async () => {
+  const entidades = await fetch('/api/entidades-login').then(r => r.json()).catch(() => []);
   $('#app').innerHTML = `<div class="frame"><div class="login"><div>
     <form class="login-card" id="f">
-      <div style="display:flex;align-items:center;gap:10px">${MARK(32)}<div><div class="b" style="font-size:16px">JUNTAUCR</div><div class="xs ink2">Operaciones SINPE</div></div></div>
-      <div><h1>Ingresar</h1><p class="ink2" style="margin-top:4px">Usa tu usuario de operaciones.</p></div>
-      ${fld('Correo', '<input class="in" id="correo" type="email" autocomplete="username" required value="admin@juntaucr.cr">', {for:'correo'})}
-      ${fld('Contraseña', '<input class="in" id="clave" type="password" autocomplete="current-password" required>', {for:'clave', hint:'Usuario de prueba: admin@juntaucr.cr · juntaucr2026'})}
+      <div style="display:flex;align-items:center;gap:10px">${MARK(32)}<div><div class="b" style="font-size:16px" id="marca">SINPE Móvil</div><div class="xs ink2">Ingreso</div></div></div>
+      <div><h1>Ingresar</h1><p class="ink2" style="margin-top:4px">Elija su entidad financiera e ingrese con su usuario.</p></div>
+      ${fld('Entidad financiera', `<select class="in" id="ent" required><option value="">Elija una entidad</option>${entidades.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre)}</option>`).join('')}<option value="ADMIN">Administración JUNTAUCR</option></select>`, {for:'ent'})}
+      ${fld('Correo', '<input class="in" id="correo" type="email" autocomplete="username" required>', {for:'correo'})}
+      ${fld('Contraseña', '<input class="in" id="clave" type="password" autocomplete="current-password" required>', {for:'clave', hint:'Prueba: ana.rodriguez@correo.cr · juntaucr2026 (entidad JUNTAUCR). Administración: admin@juntaucr.cr · juntaucr2026'})}
       <div id="err"></div>
       <button class="btn pri l w" type="submit">Ingresar</button>
     </form>
     <p class="xs ink2" style="text-align:center;margin-top:16px">Entorno de simulación con datos ficticios. No se conecta con el Banco Central de Costa Rica.</p>
   </div></div></div>`;
   $('#f').onsubmit = e => { e.preventDefault(); accion($('#f button'), async () => {
-    estado.usuario = await POST('/api/login', {correo: $('#correo').value, clave: $('#clave').value});
+    const ent = $('#ent').value;
+    estado.usuario = await POST('/api/login', {correo: $('#correo').value, clave: $('#clave').value, entidad: ent === 'ADMIN' ? '' : ent});
+    estado.transferencia = null; estado.resultado = null;
     ir('/inicio');
   }, $('#err')); };
-  $('#clave').focus();
+  setTema('');
+  $('#ent').onchange = e => {
+    const v = e.target.value, o = e.target.selectedOptions[0];
+    setTema(v && v !== 'ADMIN' ? v : '');
+    $('#marca').textContent = v === 'ADMIN' ? 'JUNTAUCR' : v ? o.textContent : 'SINPE Móvil';
+  };
+  $('#ent').focus();
 };
 
 /* ---------- inicio ---------- */
+R.inicioCliente = async () => {
+  const [cuentas, tels, movs] = await Promise.all([GET('/api/cuentas'), GET('/api/telefonos'), GET('/api/mis-movimientos')]);
+  const u = estado.usuario;
+  const tot = m => cuentas.filter(c => c.moneda === m && c.estado === 'ACTIVA').reduce((x, c) => x + c.saldo, 0);
+  const nAf = tels.filter(t => t.afiliado === 'SI').length;
+  return shell('inicio', cr(['Inicio']), title(`Hola, ${esc(first(u.nombre))}`, `Está en <b>${esc(u.entidad)}</b>. Aquí solo ve sus cuentas y teléfonos de esta entidad.`,
+    `<a class="btn" href="#/sinpe">SINPE Móvil</a><a class="btn pri" href="#/transferir">${ic('swap')}Nueva transferencia</a>`) + `
+  <div class="figs">
+    <div class="fig"><div class="k">Mis cuentas</div><div class="v num">${cuentas.length}</div><div class="n">en ${esc(u.entidad)}</div></div>
+    <div class="fig"><div class="k">Saldo en colones</div><div class="v num">${fm(tot('CRC'))}</div>${tot('USD') ? `<div class="n">más ${fm(tot('USD'), 'USD')}</div>` : ''}</div>
+    <div class="fig"><div class="k">Teléfonos</div><div class="v num">${tels.length}</div><div class="n">${nAf} afiliados a SINPE Móvil</div></div>
+  </div>
+  <div class="cols c21">
+    <div class="block"><div class="bh"><h2>Mis últimas transferencias</h2><div class="act"><a class="btn q" href="#/movimientos">Ver movimientos</a></div></div>
+      ${movs.length ? `<table><tbody>${movs.map(t => `<tr><td style="width:120px" class="ink2">${num(fdh(t.fecha))}</td><td style="width:100%">${trPair(t, 'fix')}</td><td class="sm ink2">${t.tipo === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td></tr>`).join('')}</tbody></table>` : vacio('Todavía no tiene transferencias.')}
+    </div>
+    <div class="block"><div class="bh"><h2>Mis cuentas</h2></div>
+      ${cuentas.length ? `<table><tbody>${cuentas.map(a => `<tr class="go" data-href="/cuentas/${a.iban}"><td><div class="b num">${gi(a.iban)}</div><div class="xs ink2">${cur(a.moneda)} · ${st(a.estado)}</div></td><td class="r b num">${fm(a.saldo, a.moneda)}</td></tr>`).join('')}</tbody></table>` : vacio('No tiene cuentas en esta entidad.')}
+    </div>
+  </div>`);
+};
+
 R.inicio = async () => {
+  if (!esAdmin()) return R.inicioCliente();
   const d = await GET('/api/resumen');
   const ce = Object.fromEntries(d.cuentas.map(c => [c.estado, c.n]));
   const nCuentas = d.cuentas.reduce((s, c) => s + c.n, 0);
@@ -196,6 +238,7 @@ function panelCliente(c) {
     ${fld('Identificación', `<input class="in num" id="c-id" ${nuevo ? 'required placeholder="1-1456-0789"' : `disabled value="${esc(c.identificacion)}"`}>`, {for:'c-id', hint: nuevo ? 'No puede repetirse entre clientes.' : 'La identificación no se modifica.'})}
     ${fld('Nombre completo', `<input class="in" id="c-n" required value="${esc(c?.nombre_completo)}">`, {for:'c-n'})}
     ${fld('Correo electrónico', `<input class="in" id="c-e" type="email" required value="${esc(c?.correo)}">`, {for:'c-e'})}
+    ${nuevo ? fld('Clave inicial', '<input class="in" id="c-k" type="text" required minlength="6" value="juntaucr2026" autocomplete="off">', {for:'c-k', hint:'Con el correo y esta clave el cliente ingresa a la aplicación. Mínimo 6 caracteres.'}) : ''}
     ${nuevo ? '' : fld('Estado', `<select class="in" id="c-s"><option${c.estado === 'ACTIVO' ? ' selected' : ''}>ACTIVO</option><option${c.estado === 'INACTIVO' ? ' selected' : ''}>INACTIVO</option></select>`, {for:'c-s'})}
     ${nuevo ? nota('', 'La fecha de registro se asigna al guardar. Cuentas y teléfonos se agregan desde la ficha del cliente.') : ''}
     <div id="err"></div><button type="submit" hidden></button></form>`,
@@ -203,7 +246,7 @@ function panelCliente(c) {
     capa => {
       const enviar = () => accion($('#ok'), async () => {
         if (nuevo) {
-          const r = await POST('/api/clientes', {identificacion: $('#c-id').value, nombre: $('#c-n').value, correo: $('#c-e').value});
+          const r = await POST('/api/clientes', {identificacion: $('#c-id').value, nombre: $('#c-n').value, correo: $('#c-e').value, clave: $('#c-k').value});
           cerrarCapa(); aviso('Cliente registrado.'); ir('/clientes/' + r.id_cliente);
         } else {
           await PUT('/api/clientes/' + c.id_cliente, {nombre: $('#c-n').value, correo: $('#c-e').value, estado: $('#c-s').value});
@@ -265,7 +308,7 @@ R.cliente = async ([id]) => {
 R.cuentas = async (p, qs) => {
   const lista = await GET('/api/cuentas');
   const tot = m => lista.filter(a => a.moneda === m).reduce((s, a) => s + a.saldo, 0);
-  const html = shell('cuentas', cr(['Cuentas IBAN']), title('Cuentas IBAN', `${plural(lista.length, 'cuenta', 'cuentas')}. ${fm(tot('CRC'))} en colones y ${fm(tot('USD'), 'USD')} en dólares.`, `<a class="btn pri" href="#/cuentas/nueva">${ic('plus')}Nueva cuenta</a>`) + `
+  const html = shell('cuentas', cr(['Cuentas IBAN']), title(esAdmin() ? 'Cuentas IBAN' : 'Mis cuentas', `${plural(lista.length, 'cuenta', 'cuentas')}. ${fm(tot('CRC'))} en colones y ${fm(tot('USD'), 'USD')} en dólares.`, esAdmin() ? `<a class="btn pri" href="#/cuentas/nueva">${ic('plus')}Nueva cuenta</a>` : '') + `
     <div class="toolbar"><div class="searchbox">${ic('search')}<input class="in" id="q" placeholder="IBAN o titular" value="${esc(qs.get('q'))}"></div>
       <div class="seg" id="seg"><span class="on" data-v="">Todas</span><span data-v="CRC">CRC</span><span data-v="USD">USD</span></div>
       <select class="in" id="est" style="min-height:34px;width:180px" aria-label="Estado"><option value="">Estado: todos</option><option>ACTIVA</option><option>INACTIVA</option><option>BLOQUEADA</option></select></div>
@@ -349,8 +392,8 @@ R.cuenta = async ([iban]) => {
   const {cuenta: c, telefonos, movimientos, mes} = await GET('/api/cuentas/' + iban);
   const vig = telefonos.filter(t => t.situacion === 'VIGENTE'), ant = telefonos.filter(t => t.situacion !== 'VIGENTE');
   const html = shell('cuentas', cr(['Cuentas IBAN', '/cuentas'], [sh(c.iban)]), `
-    <div class="title"><div><h1 class="num">${gi(c.iban)}</h1><p><span class="who" style="display:inline-flex;gap:8px;vertical-align:middle">${av(c.titular)}<a href="#/clientes/${c.id_cliente}">${esc(c.titular)}</a></span> · ${esc(c.entidad)} · ${cur(c.moneda)} · abierta ${num(fd(c.fecha_apertura))}</p></div>
-      <div class="act" style="align-items:center">${st(c.estado)}<button class="btn" id="estado">Cambiar estado</button>${c.estado === 'ACTIVA' ? `<a class="btn pri" href="#/transferir/iban?origen=${c.iban}">${ic('swap')}Transferir</a>` : ''}</div></div>
+    <div class="title"><div><h1 class="num">${gi(c.iban)}</h1><p><span class="who" style="display:inline-flex;gap:8px;vertical-align:middle">${av(c.titular)}${esAdmin() ? `<a href="#/clientes/${c.id_cliente}">${esc(c.titular)}</a>` : esc(c.titular)}</span> · ${esc(c.entidad)} · ${cur(c.moneda)} · abierta ${num(fd(c.fecha_apertura))}</p></div>
+      <div class="act" style="align-items:center">${st(c.estado)}${esAdmin() ? '<button class="btn" id="estado">Cambiar estado</button>' : ''}${c.estado === 'ACTIVA' ? `<a class="btn pri" href="#/transferir/iban?origen=${c.iban}">${ic('swap')}Transferir</a>` : ''}</div></div>
     <div class="figs"><div class="fig"><div class="k">Saldo disponible</div><div class="big num">${fm(c.saldo, c.moneda)}</div></div>
       <div class="fig"><div class="k">Recibido este mes</div><div class="v num pos">+${fm(mes.total_recibido, c.moneda)}</div><div class="n">${plural(mes.cantidad_recibidas, 'transferencia', 'transferencias')}</div></div>
       <div class="fig"><div class="k">Enviado este mes</div><div class="v num">−${fm(mes.total_enviado, c.moneda)}</div><div class="n">${plural(mes.cantidad_enviadas, 'transferencia', 'transferencias')}</div></div></div>
@@ -376,10 +419,10 @@ R.cuenta = async ([iban]) => {
 
 /* ---------- teléfonos ---------- */
 async function panelTelefono(identificacion) {
-  const clientes = (await GET('/api/clientes')).filter(c => c.estado === 'ACTIVO');
+  const clientes = esAdmin() ? (await GET('/api/clientes')).filter(c => c.estado === 'ACTIVO') : [];
   abrirCapa('drawer', 'Registrar teléfono', `<form class="stack" style="gap:18px" id="ft">
       ${fld('Número celular', '<input class="in num b" id="tn" inputmode="numeric" maxlength="9" placeholder="8888-1111" required style="font-size:16px">', {for:'tn', hint:'Debe tener 8 dígitos y no estar registrado.', hid:'tnh'})}
-      ${fld('Titular', `<select class="in" id="tt" required><option value="">Elija un cliente activo</option>${opts(clientes, c => c.identificacion, c => `${c.nombre_completo} · ${c.identificacion}`, identificacion)}</select>`, {for:'tt'})}
+      ${!esAdmin() ? '' : fld('Titular', `<select class="in" id="tt" required><option value="">Elija un cliente activo</option>${opts(clientes, c => c.identificacion, c => `${c.nombre_completo} · ${c.identificacion}`, identificacion)}</select>`, {for:'tt'})}
       ${nota('', 'El número queda registrado a nombre del cliente, pero <b>sin afiliar</b>. Para recibir SINPE Móvil hay que afiliarlo después.')}
       <div id="err"></div><button type="submit" hidden></button></form>`,
     `<button class="btn" data-cerrar>Cancelar</button><button class="btn pri" id="ok">Registrar teléfono</button>`,
@@ -387,7 +430,7 @@ async function panelTelefono(identificacion) {
       $('#tn').oninput = e => { const d = e.target.value.replace(/\D/g, '').slice(0, 8); e.target.value = d.length > 4 ? tel(d) : d;
         $('#tnh').className = 'hint ' + (d.length === 8 ? 'ok' : d ? '' : ''); $('#tnh').textContent = d.length === 8 ? '8 dígitos' : `${d.length} de 8 dígitos`; };
       const enviar = () => accion($('#ok'), async () => {
-        await POST('/api/telefonos', {numero: $('#tn').value, identificacion: $('#tt').value});
+        await POST('/api/telefonos', {numero: $('#tn').value, identificacion: $('#tt')?.value});
         cerrarCapa(); aviso('Teléfono registrado (sin afiliar).'); render();
       }, $('#err'));
       $('#ok').onclick = enviar; $('#ft').onsubmit = e => { e.preventDefault(); enviar(); };
@@ -421,12 +464,12 @@ R.telefonos = async () => {
     let f = '';
     const pintar = () => {
       const fil = lista.filter(t => !f || t.afiliado === f);
-      $('#filas').innerHTML = fil.length ? fil.map(t => `<tr><td class="b">${num(tel(t.numero))}</td><td><div class="who">${av(t.titular)}<a href="#/clientes/${t.id_cliente}">${esc(t.titular)}</a></div></td>
+      $('#filas').innerHTML = fil.length ? fil.map(t => `<tr><td class="b">${num(tel(t.numero))}</td><td><div class="who">${av(t.titular)}${esAdmin() ? `<a href="#/clientes/${t.id_cliente}">${esc(t.titular)}</a>` : esc(t.titular)}</div></td>
         <td>${t.afiliado === 'SI' ? `<span class="link"><span class="st ok">Afiliado</span><i></i>${num(gi(t.iban_afiliado))}</span>` : `${af(0)}${porque(t) ? ` <span class="sm ink2">· ${porque(t)}</span>` : ''}`}</td>
         <td>${t.fecha_afiliacion ? num(fd(t.fecha_afiliacion)) : '<span class="ink3">—</span>'}</td>
         <td class="r">${t.afiliado === 'SI' ? `<button class="btn s" data-trasladar="${t.numero}">Trasladar</button> <button class="btn s neg" data-desafiliar="${t.numero}">Desafiliar</button>`
           : porque(t) ? '' : `<a class="btn s pri" href="#/sinpe?numero=${t.numero}">Afiliar</a>`}
-          <button class="btn s" data-titular="${t.numero}">Titular</button> <a class="btn s" href="#/sinpe/historial/${t.numero}">Historial</a></td></tr>`).join('')
+          ${esAdmin() ? `<button class="btn s" data-titular="${t.numero}">Titular</button> ` : ''}<a class="btn s" href="#/sinpe/historial/${t.numero}">Historial</a></td></tr>`).join('')
         : `<tr><td colspan="5">${vacio('No hay teléfonos en esta lista.')}</td></tr>`;
       $$('[data-trasladar]').forEach(b => b.onclick = () => modalTrasladar(b.dataset.trasladar));
       $$('[data-desafiliar]').forEach(b => { const t = lista.find(x => x.numero === b.dataset.desafiliar); b.onclick = () => modalDesafiliar(t.numero, t.iban_afiliado, t.titular); });
@@ -562,18 +605,34 @@ function descargarCSV(nombre, filas) {
 const transferTabs = on => `<div class="tabs"><a class="tab${on === 'tel' ? ' on' : ''}" href="#/transferir">Por teléfono</a><a class="tab${on === 'iban' ? ' on' : ''}" href="#/transferir/iban">Por IBAN</a></div>`;
 
 R.transferir = async () => {
-  const tels = (await GET('/api/telefonos')).filter(t => t.afiliado === 'SI');
+  const [todos, cuentas] = await Promise.all([GET('/api/telefonos'), GET('/api/cuentas')]);
+  const tels = todos.filter(t => t.afiliado === 'SI');
+  // Cuentas desde las que se puede enviar por SINPE Móvil: las que tienen algún teléfono afiliado
+  const origenes = cuentas.filter(c => tels.some(t => t.iban_afiliado === c.iban));
+  const previo = tels.find(t => t.numero === estado.transferencia?.origen);
   const html = shell('transferir', cr(['Transferir']), title('Transferir', 'El dinero sale y entra en un mismo paso. Si algo falla, no se mueve nada.') + transferTabs('tel') + `
     <div class="cols c2">
       <div class="block"><form class="bb stack" style="gap:18px;padding-top:20px" id="f">
-        ${fld('Desde', `<select class="in" id="o" required><option value="">Teléfono afiliado de origen</option>${tels.map(t => `<option value="${t.numero}"${estado.transferencia?.origen === t.numero ? ' selected' : ''}>${tel(t.numero)} · ${esc(t.titular)}</option>`).join('')}</select>`, {for:'o', hint:'', hid:'oh'})}
+        ${fld('Desde mi cuenta', `<select class="in num" id="c" required><option value="">Elija la cuenta de origen</option>${origenes.map(c => `<option value="${c.iban}"${previo?.iban_afiliado === c.iban ? ' selected' : ''}>${gi(c.iban)} · ${esc(first(c.titular))} · ${fm(c.saldo, c.moneda)}</option>`).join('')}</select>`, {for:'c', hint:'', hid:'oh'})}
+        <div id="telo" hidden>${fld('Con el teléfono', '<select class="in num" id="o"></select>', {for:'o', hint:'Esta cuenta tiene varios teléfonos afiliados.'})}</div>
         ${fld('Para', `<input class="in num b" id="d" inputmode="numeric" maxlength="9" placeholder="8888-3333" required value="${tel(estado.transferencia?.destino || '')}">`, {for:'d', hint:'Número de 8 dígitos afiliado a SINPE Móvil.', hid:'dh'})}
         <div class="form">${fld('Monto', `<div class="money"><span class="pre">₡</span><input class="in num b" id="m" type="number" min="0.01" step="0.01" required value="${estado.transferencia?.monto || ''}"></div>`, {for:'m'})}${fld('Detalle', `<input class="in" id="det" maxlength="140" placeholder="Opcional" value="${esc(estado.transferencia?.detalle)}">`, {for:'det'})}</div>
         <button class="btn pri l" type="submit">Revisar transferencia</button>
       </form></div>
       <div class="block" style="background:var(--sub);border-color:transparent"><div class="bb" style="padding-top:24px" id="prev"></div></div>
     </div>`);
-  return [html, () => vistaPrevia('tel')];
+  return [html, () => {
+    // El procedimiento recibe el teléfono; la persona solo elige la cuenta.
+    // Si la cuenta tiene un único teléfono afiliado se usa ese; si tiene varios, se pregunta cuál.
+    const llenar = () => {
+      const delIban = tels.filter(t => t.iban_afiliado === $('#c').value);
+      $('#o').innerHTML = delIban.map(t => `<option value="${t.numero}"${t.numero === previo?.numero ? ' selected' : ''}>${tel(t.numero)}</option>`).join('');
+      $('#telo').hidden = delIban.length < 2;
+    };
+    llenar();
+    vistaPrevia('tel');
+    $('#c').addEventListener('change', () => { llenar(); $('#o').dispatchEvent(new Event('change')); });
+  }];
 };
 
 R.transferirIban = async (p, qs) => {
@@ -599,7 +658,7 @@ function vistaPrevia(tipo) {
   const lim = v => tipo === 'tel' ? v.replace(/\D/g, '').slice(0, 8) : v.replace(/\s/g, '').toUpperCase().slice(0, 22);
   const completo = v => tipo === 'tel' ? v.length === 8 : v.length === 22;
   const buscar = v => GET(`/api/buscar/${tipo === 'tel' ? 'telefono' : 'iban'}/${v}`);
-  const etiqueta = (x, v) => tipo === 'tel' ? [tel(v), x ? `${esc(first(x.titular))}${x.iban ? ' · ' + sh(x.iban) : ''}` : '—'] : [sh(v), x ? `${esc(first(x.titular))} · ${x.moneda}` : '—'];
+  const etiqueta = (x, v) => tipo === 'tel' ? [tel(v), x ? esc(first(x.titular)) : '—'] : [sh(v), x ? `${esc(first(x.titular))} · ${x.moneda}` : '—'];
   const pintar = () => {
     const o = $('#o').value, d = lim($('#d').value), m = +$('#m').value;
     const mon = (tipo === 'tel' ? 'CRC' : O?.moneda) || 'CRC';
@@ -650,7 +709,7 @@ R.confirmar = async () => {
         <div class="ink2 sm">Monto</div><div class="huge num">${fm(t.monto, mon)}</div>
         <div style="margin:28px 0 8px">${pair(a, b, t.tipo === 'tel' ? 'SINPE Móvil' : 'IBAN', 'lg')}</div>
         <div class="kv"><span>Cuenta de origen</span><span class="num">${gi(t.O.iban || '')}</span></div>
-        <div class="kv"><span>Cuenta de destino</span><span class="num">${gi(t.D.iban || '')} · ${esc(t.D.entidad || '')}</span></div>
+        ${t.tipo === 'tel' ? '' : `<div class="kv"><span>Cuenta de destino</span><span class="num">${gi(t.D.iban || '')} · ${esc(t.D.entidad || '')}</span></div>`}
         <div class="kv"><span>Detalle</span><span>${esc(t.detalle) || '<span class="ink3">—</span>'}</span></div>
         <div class="kv"><span>Saldo después</span><b class="num">${t.O.saldo != null ? fm(t.O.saldo - t.monto, mon) : '—'}</b></div>
       </div><div class="mf"><a class="btn" href="#${t.tipo === 'tel' ? '/transferir' : '/transferir/iban'}">Volver</a><button class="btn pri" id="ok">Transferir ${fm(t.monto, mon)}</button></div></div>
@@ -677,6 +736,8 @@ R.resultado = async () => {
           <div class="huge num">${fm(t.monto, t.moneda)}</div>
           <div style="margin:28px 0 8px">${t.tipo === 'SINPE' ? pair([tel(t.telefono_origen), esc(t.titular_origen)], [tel(t.telefono_destino), esc(t.titular_destino)], 'SINPE Móvil', 'lg live') : pair([sh(t.iban_origen), esc(t.titular_origen)], [sh(t.iban_destino), esc(t.titular_destino)], 'IBAN', 'lg live')}</div>
           <div class="kv"><span>Comprobante</span><b class="num">${t.comprobante}</b></div>
+          <div class="kv"><span>Cuenta de origen</span><span class="num">${gi(t.iban_origen)}</span></div>
+          ${t.tipo === 'SINPE' ? '' : `<div class="kv"><span>Cuenta de destino</span><span class="num">${gi(t.iban_destino)}${p.D?.entidad ? ' · ' + esc(p.D.entidad) : ''}</span></div>`}
           <div class="kv"><span>Fecha</span><span class="num">${fdh(t.fecha)}</span></div>
           <div class="kv"><span>Detalle</span><span>${esc(t.detalle) || '<span class="ink3">—</span>'}</span></div>
           <div class="kv"><span>Saldo de ${esc(first(t.titular_origen))}</span><b class="num">${fm(t.saldo_origen_despues, t.moneda)}</b></div>
@@ -712,7 +773,7 @@ R.movimientos = async (p, qs) => {
   const desde = qs.get('desde') || inicioMes(), hasta = qs.get('hasta') || hoyISO();
   const c = cuentas.find(x => x.iban === iban);
   let mv = null, cons = null, err = '';
-  try { [mv, cons] = await Promise.all([GET(`/api/movimientos?iban=${iban}&desde=${desde}&hasta=${hasta}`), GET(`/api/conservacion?desde=${desde}&hasta=${hasta}`)]); }
+  try { [mv, cons] = await Promise.all([GET(`/api/movimientos?iban=${iban}&desde=${desde}&hasta=${hasta}`), esAdmin() ? GET(`/api/conservacion?desde=${desde}&hasta=${hasta}`) : null]); }
   catch (e) { err = e.message; }
   const m = c?.moneda;
   const html = shell('movimientos', cr(['Movimientos']), title('Movimientos', 'Lo enviado y recibido por una cuenta en un período, con su saldo después de cada movimiento.', mv ? `<button class="btn" id="csv">${ic('dl')}Exportar</button>` : '') + `
@@ -734,12 +795,12 @@ R.movimientos = async (p, qs) => {
         <td><div class="who">${av(t.titular_contraparte)}<div><div>${esc(first(t.titular_contraparte))}</div><div class="xs ink2 num">${t.tipo === 'SINPE' ? tel(t.telefono_contraparte) : sh(t.iban_contraparte)}</div></div></div></td>
         <td class="ink2">${t.tipo === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td><td class="ink2">${esc(t.detalle) || '—'}</td><td class="r num">${out ? fm(t.monto, m) : ''}</td><td class="r num pos">${out ? '' : fm(t.monto, m)}</td><td class="r b num">${fm(t.saldo_despues, m)}</td></tr>`; }).join('')}</tbody>
     </table>` : vacio('La cuenta no tuvo movimientos en este período.')}</div>
-    <div class="block"><div class="bh"><h2>El dinero no se crea ni se pierde</h2><div class="act">${cons.monedas.map(x => `<span class="st ${x.conservacion === 'SE CONSERVA' ? 'ok' : 'bad'}">${x.moneda}: ${fm(x.total_inicial, x.moneda)} antes y ${fm(x.total_final, x.moneda)} después</span>`).join(' ')}</div></div>
+    ${cons ? `<div class="block"><div class="bh"><h2>El dinero no se crea ni se pierde</h2><div class="act">${cons.monedas.map(x => `<span class="st ${x.conservacion === 'SE CONSERVA' ? 'ok' : 'bad'}">${x.moneda}: ${fm(x.total_inicial, x.moneda)} antes y ${fm(x.total_final, x.moneda)} después</span>`).join(' ')}</div></div>
       ${cons.cuentas.length ? `<table>
       <thead><tr><th>Cuenta</th><th>Titular</th><th class="r">Saldo inicial</th><th class="r">Enviado</th><th class="r">Recibido</th><th class="r">Saldo final</th><th>Verificación</th></tr></thead>
       <tbody>${cons.cuentas.map(x => `<tr><td class="num">${gi(x.iban)}</td><td><div class="who">${av(x.titular)}${esc(x.titular)}</div></td><td class="r num">${fm(x.saldo_inicial, x.moneda)}</td><td class="r num">${fm(x.enviado, x.moneda)}</td><td class="r num">${fm(x.recibido, x.moneda)}</td><td class="r b num">${fm(x.saldo_final, x.moneda)}</td><td>${x.verificacion === 'CUADRA' ? '<span class="st ok">Cuadra</span>' : '<span class="st bad">No cuadra</span>'}</td></tr>`).join('')}</tbody>
       <tfoot>${cons.monedas.map(x => `<tr><td>Total ${x.moneda}</td><td class="sm ink2" style="font-weight:500">${plural(x.cuentas, 'cuenta participante', 'cuentas participantes')}</td><td class="r num">${fm(x.total_inicial, x.moneda)}</td><td class="r num">${fm(x.total_enviado, x.moneda)}</td><td class="r num">${fm(x.total_recibido, x.moneda)}</td><td class="r num">${fm(x.total_final, x.moneda)}</td><td>${x.conservacion === 'SE CONSERVA' ? '<span class="st ok">Se conserva</span>' : '<span class="st bad">No se conserva</span>'}</td></tr>`).join('')}</tfoot>
-    </table>` : vacio('Ninguna cuenta tuvo transferencias en este período.')}</div>`}`);
+    </table>` : vacio('Ninguna cuenta tuvo transferencias en este período.')}</div>` : ''}`}`);
   return [html, () => {
     $('#f').onsubmit = e => { e.preventDefault(); ir(`/movimientos?iban=${$('#c').value}&desde=${$('#de').value}&hasta=${$('#ha').value}`); };
     $('#csv') && ($('#csv').onclick = () => descargarCSV(`movimientos-${iban}-${desde}-${hasta}.csv`,
@@ -802,10 +863,12 @@ async function render() {
   if (!estado.usuario && ruta !== '/login') {
     try { estado.usuario = await GET('/api/me'); } catch { return; }
   }
+  if (ruta !== '/login') setTema(esAdmin() ? '' : estado.usuario?.codigo_entidad);
   const hit = RUTAS.map(([re, k]) => [ruta.match(re), k]).find(([m]) => m);
   if (!hit) return ir('/inicio');
   const [m, clave] = hit;
   if (clave === 'login') return R.login();
+  if (!esAdmin() && SOLO_ADMIN.includes(clave)) return ir('/inicio');
   if ($('#contenido')) $('#contenido').style.opacity = '.55';
   try {
     const out = await R[clave](m.slice(1).map(decodeURIComponent), qs);

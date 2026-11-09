@@ -102,6 +102,12 @@ CALL sp_probar('2.3 · IBAN de 21 caracteres',      "CALL sp_registrar_cuenta('C
 CALL sp_probar('2.3 · saldo inicial negativo',     "CALL sp_registrar_cuenta('CR99015200000000000001', '1-1234-0567', '0152', 'CRC', -1, NULL, 'ACTIVA', @a)", 'ERROR');
 CALL sp_probar('2.3 · saldo negativo directo (CHECK)', "UPDATE cuenta SET saldo = -1 WHERE iban = 'CR54015200004445556667'", 'ERROR');
 
+-- Acceso de clientes: el cliente nuevo recibe su usuario y la clave debe ser válida
+CALL sp_probar('Acceso · cliente nuevo con clave corta', "CALL sp_registrar_cliente('9-9999-0001', 'Prueba Acceso', 'acceso@correo.cr', '123', @x)", 'ERROR');
+CALL sp_probar('Acceso · cliente nuevo crea su usuario', "CALL sp_registrar_cliente('9-9999-0002', 'Prueba Acceso', 'acceso2@correo.cr', 'clave123', @x)", 'OK');
+CALL sp_probar('Acceso · el usuario quedó ligado al cliente',
+  "CALL sp_afirmar((SELECT COUNT(*) FROM usuario WHERE correo = 'acceso2@correo.cr' AND rol = 'CLIENTE' AND id_cliente IS NOT NULL) = 1)", 'OK');
+
 SELECT n, caso, esperado, obtenido, resultado, mensaje FROM resultado_prueba ORDER BY n;
 SELECT SUM(resultado = 'PASA') AS pasan, SUM(resultado = 'FALLA') AS fallan FROM resultado_prueba;
 
