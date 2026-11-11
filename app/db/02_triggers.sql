@@ -139,6 +139,11 @@ BEGIN
   IF NEW.iban <> OLD.iban THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El IBAN de una cuenta no se puede modificar.';
   END IF;
+  -- La moneda no cambia si ya hay transferencias: los montos guardados quedarían en otra moneda.
+  IF NEW.id_moneda <> OLD.id_moneda
+     AND EXISTS (SELECT 1 FROM transferencia WHERE id_cuenta_origen = OLD.id_cuenta OR id_cuenta_destino = OLD.id_cuenta) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta ya tiene transferencias: su moneda no se puede cambiar.';
+  END IF;
   IF (NEW.id_cliente <> OLD.id_cliente
       OR NEW.id_moneda <> OLD.id_moneda
       OR (NEW.estado <> 'ACTIVA' AND OLD.estado = 'ACTIVA'))

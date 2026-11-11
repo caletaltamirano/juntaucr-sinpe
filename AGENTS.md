@@ -51,14 +51,14 @@ y `SIGNAL SQLSTATE '45000'` para los errores de negocio.
 - 5.5 Totales enviados y recibidos en un período.
 - 5.6 Conservación del total en las transferencias internas.
 
-## 2. Estado actual (al 2026-11-05)
+## 2. Estado actual (al 2026-11-09)
 
 | Etapa | Estado | Dónde |
 |---|---|---|
 | Prototipo navegable (21 pantallas, diseño "Billete de colón") | ✅ Hecho | `prototipo/index.html` (`?modo=demo` para navegarlo) |
 | Prototipo importado a Figma (html.to.design) | ✅ Hecho | Archivo de Figma del grupo (fuera del repositorio) |
 | Guía PDF de pantallas | ✅ Hecho | `Guia-de-pantallas-JUNTAUCR.pdf` |
-| Base de datos MySQL completa | ✅ Hecho, 36/36 pruebas pasan | `app/db/` |
+| Base de datos MySQL completa | ✅ Hecho, 75/75 pruebas pasan | `app/db/` |
 | Servidor web (Node + Express) | ✅ Hecho | `app/server.js` |
 | Interfaz web real (todas las pantallas del prototipo) | ✅ Hecha y revisada en Chrome | `app/public/` |
 
@@ -76,7 +76,7 @@ npm start                     # http://localhost:3100
 ```
 
 Ingreso (una sola pantalla, se elige la entidad financiera):
-- **Administración:** entidad «Administración JUNTAUCR», `admin@juntaucr.cr` / `juntaucr2026`. Crea clientes (con clave inicial), cuentas IBAN, teléfonos, catálogos y cambia estados. Ve todas las entidades.
+- **Administración:** opción «Administración del sistema» (no es una entidad financiera: controla todas, como un banco central; el menú dice «Administración»), `admin@juntaucr.cr` / `juntaucr2026`. Crea clientes (con clave inicial), cuentas IBAN, teléfonos, catálogos y cambia estados. Ve todas las entidades.
 - **Cliente:** elige su entidad y entra con su correo y `juntaucr2026`, p. ej. `ana.rodriguez@correo.cr` (JUNTAUCR) o `cjimenez@correo.cr` (Banco Volcán). Solo ve y opera lo suyo dentro de esa entidad: afiliar/desafiliar/trasladar SINPE, registrar teléfono, transferir (a cualquier entidad) y ver movimientos. Si no tiene cuentas en la entidad elegida, no entra.
 
 Detalles del entorno que ya causaron problemas:
@@ -92,11 +92,12 @@ prototipo/          Prototipo estático (fuente del diseño). No se conecta a na
 app/
   db/01_esquema.sql        Tablas, CHECK, UNIQUE, FK
   db/02_triggers.sql       4 triggers obligatorios + 6 adicionales (regla 10 e inmutabilidad)
-  db/03_procedimientos.sql Procedimientos obligatorios + sp_registrar_cliente,
-                           sp_cambiar_titular_telefono, sp_cambiar_estado_cuenta
+  db/03_procedimientos.sql Procedimientos obligatorios + sp_registrar_cliente, sp_actualizar_cliente,
+                           sp_cambiar_titular_telefono, sp_cambiar_estado_cuenta,
+                           sp_registrar_entidad, sp_renombrar_entidad
   db/04_consultas.sql      Vistas (v_cuentas, v_transferencias, v_telefonos_cliente) e informes 5.x
   db/05_datos.sql          Escenario de prueba, cargado con los procedimientos
-  db/06_pruebas.sql        36 casos (sp_probar ejecuta SQL dinámico y anota PASA/FALLA)
+  db/06_pruebas.sql        75 casos (sp_probar ejecuta SQL dinámico y anota PASA/FALLA; sp_afirmar comprueba datos)
   instalar.js              Ejecuta db/*.sql y entiende DELIMITER, como Workbench
   server.js                API REST: solo llama a procedimientos y vistas
   public/                  SPA sin framework: index.html, app.js, styles.css
@@ -122,7 +123,7 @@ app/
     `.pair` (el "par SINPE" origen → monto → destino), `.st` (estado con punto) y `.note`.
     No use píldoras, encabezados en mayúscula ni tarjetas con íconos.
 
-11. **Roles:** `usuario.rol` es `ADMIN` o `CLIENTE` (con `id_cliente`). `sp_registrar_cliente` recibe la clave inicial y crea también el usuario. En `server.js`, `soloAdmin`, `exigirCuentaPropia` y `exigirTelefonoPropio` solo limitan QUIÉN pide cada operación; las reglas de negocio siguen en MySQL. La sesión del cliente guarda la entidad elegida. «Por teléfono» elige la cuenta de origen y el teléfono se deduce de sus afiliaciones.
+11. **Roles:** `usuario.rol` es `ADMIN` o `CLIENTE` (con `id_cliente`). `sp_registrar_cliente` recibe la clave inicial y crea también el usuario. En `server.js`, `soloAdmin`, `exigirCuentaPropia` y `exigirTelefonoPropio` solo limitan QUIÉN pide cada operación; las reglas de negocio siguen en MySQL. La sesión del cliente guarda la entidad elegida. «Por teléfono», como en SINPE Móvil real (decisión del grupo, se aparta a propósito de la 2.8): el cliente elige **cualquiera** de sus cuentas activas en colones de la entidad de la sesión y solo escribe el número de destino. `sp_transferir_sinpe(tel_origen, iban_origen, tel_destino, …)` recibe el IBAN, exige que el titular tenga un número afiliado (en cualquier entidad), lo registra como teléfono de origen y aplica la regla 7 comparando cuentas. Con `iban_origen` NULL funciona como en el enunciado (debita la cuenta afiliada al teléfono); así lo usa la administración, que elige el teléfono de origen para simular a un cliente.
 12. **Paleta por entidad:** `styles.css` define `html[data-entidad="0814"|"0901"|"0733"]` (naranja, azul, morado); JUNTAUCR y la administración usan el verde de `:root`. `setTema()` en `app.js` pone el atributo según la entidad de la sesión. Use siempre `var(--accent)` y compañía, nunca colores fijos. El título del menú lateral es el nombre de la entidad.
 
 **Rutas de la interfaz (hash):** `#/inicio`, `#/clientes`, `#/clientes/:id`, `#/cuentas`, `#/cuentas/nueva`,
@@ -163,8 +164,7 @@ Opcionales:
   agregar una variable de sesión `@fecha_simulada` que los procedimientos usen en lugar de `NOW()` solo durante la carga.
 - [ ] Desplegar en internet (por ejemplo Railway o Render con MySQL administrado) si el profesor quiere verlo en línea.
 - [ ] Cambio de clave por el cliente y recuperación de contraseña (hoy la sesión está en memoria y se pierde al reiniciar el servidor).
-- [ ] Exportar el comprobante de transferencia (el botón "Descargar" del prototipo no se implementó; sí hay
-  exportación CSV en Movimientos y en Historial).
+- [x] Exportar el comprobante de transferencia: botón «Imprimir o guardar PDF» (estilos de impresión en `styles.css`).
 
 ## 7. Historial de trabajo
 
@@ -175,3 +175,14 @@ Opcionales:
   Express; interfaz con el diseño del prototipo. 36/36 pruebas pasan y la interfaz se revisó en Chrome.
   Problemas resueltos: `localhost` colgaba la conexión (IPv6), el puerto 3000 estaba ocupado, y el divisor SQL de
   `instalar.js` tenía una expresión regular con retroceso exponencial y no veía el `;` antes de un comentario final.
+- **2026-11-09:** se generó `Mapa-de-funcionamiento-JUNTAUCR.pdf` (revisión completa con 6 hallazgos) y se corrigieron todos:
+  H1 `sp_registrar_telefono` ahora tiene transacción y EXIT HANDLER; H2 el informe 5.6 compara contra la evidencia de
+  las transferencias y detecta saldos alterados; H3 un cliente INACTIVO no inicia operaciones (puede recibir);
+  H4 editar clientes y entidades pasa por `sp_actualizar_cliente`, `sp_registrar_entidad` y `sp_renombrar_entidad`;
+  H5 no se cambia la moneda de una cuenta con transferencias; H6 el traslado bloquea la cuenta nueva con FOR SHARE.
+  30 pruebas nuevas (66/66). Front pulido y recorrido completo en Chrome sin interfaz (admin, 2 clientes, celular):
+  se arregló el detalle de cuenta del cliente (fallaba), el diseño en celular, los avisos que tapaban el botón de los
+  paneles, el saldo ajeno visible en el comprobante del cliente, y `call()` en server.js con procedimientos sin filas.
+  Se agregó «Imprimir o guardar PDF» en el comprobante.
+- **2026-11-10:** SINPE Móvil como en la vida real (opción C): el cliente elige cualquier cuenta suya en colones y solo
+  escribe el número de destino. `sp_transferir_sinpe` recibe ahora un `iban_origen` opcional (2.º parámetro). 9 pruebas nuevas (75/75).

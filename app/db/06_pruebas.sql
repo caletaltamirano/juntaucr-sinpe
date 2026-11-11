@@ -66,17 +66,36 @@ CALL sp_probar('R6 · afiliar a cuenta USD',        "CALL sp_afiliar_sinpe('8777
 CALL sp_probar('R6 · afiliar a cuenta BLOQUEADA',  "CALL sp_afiliar_sinpe('71112222', 'CR35081400002223334445')", 'ERROR');
 CALL sp_probar('R6 · afiliar a cuenta válida',     "CALL sp_afiliar_sinpe('62223333', 'CR63081400005551112223')", 'OK');
 -- Regla 7 · tabla del enunciado
-CALL sp_probar('R7 · 88881111 → 88882222 (misma cuenta)', "CALL sp_transferir_sinpe('88881111', '88882222', 1000, 'prueba', @x)", 'ERROR');
-CALL sp_probar('R7 · 88881111 → 88883333 (otra cuenta)',  "CALL sp_transferir_sinpe('88881111', '88883333', 1000, 'prueba', @x)", 'OK');
+CALL sp_probar('R7 · 88881111 → 88882222 (misma cuenta)', "CALL sp_transferir_sinpe('88881111', NULL, '88882222', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('R7 · 88881111 → 88883333 (otra cuenta)',  "CALL sp_transferir_sinpe('88881111', NULL, '88883333', 1000, 'prueba', @x)", 'OK');
 CALL sp_probar('R7 · IBAN 001 → IBAN 001',                "CALL sp_transferir_iban('CR21015200001234567890', 'CR21015200001234567890', 1000, 'prueba', @x)", 'ERROR');
 CALL sp_probar('R7 · IBAN 001 → IBAN 002',                "CALL sp_transferir_iban('CR21015200001234567890', 'CR63081400005551112223', 1000, 'prueba', @x)", 'OK');
 -- Regla 8 · activas, monto positivo, saldo, misma moneda
 CALL sp_probar('R8 · monto cero',                  "CALL sp_transferir_iban('CR21015200001234567890', 'CR63081400005551112223', 0, 'prueba', @x)", 'ERROR');
-CALL sp_probar('R8 · monto negativo',              "CALL sp_transferir_sinpe('88881111', '88883333', -50, 'prueba', @x)", 'ERROR');
-CALL sp_probar('R8 · saldo insuficiente',          "CALL sp_transferir_sinpe('88883333', '83334444', 999999999, 'prueba', @x)", 'ERROR');
+CALL sp_probar('R8 · monto negativo',              "CALL sp_transferir_sinpe('88881111', NULL, '88883333', -50, 'prueba', @x)", 'ERROR');
+CALL sp_probar('R8 · saldo insuficiente',          "CALL sp_transferir_sinpe('88883333', NULL, '83334444', 999999999, 'prueba', @x)", 'ERROR');
 CALL sp_probar('R8 · IBAN con monedas distintas',  "CALL sp_transferir_iban('CR21015200001234567890', 'CR47015200009876543210', 1000, 'prueba', @x)", 'ERROR');
 CALL sp_probar('R8 · destino INACTIVA',            "CALL sp_transferir_iban('CR21015200001234567890', 'CR12015200003334445556', 1000, 'prueba', @x)", 'ERROR');
-CALL sp_probar('R8 · teléfono destino sin afiliar',"CALL sp_transferir_sinpe('88881111', '87776666', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('R8 · teléfono destino sin afiliar',"CALL sp_transferir_sinpe('88881111', NULL, '87776666', 1000, 'prueba', @x)", 'ERROR');
+-- SINPE Móvil como en la vida real: el cliente elige cualquier cuenta suya y solo escribe el número de destino
+CALL sp_probar('SINPE real · desde CR54 (sin números afiliados) → 88883333',
+  "CALL sp_transferir_sinpe(NULL, 'CR54015200004445556667', '88883333', 2000, 'prueba', @x)", 'OK');
+CALL sp_probar('SINPE real · se registró como SINPE, debitó CR54 y usó 88881111 de origen',
+  "CALL sp_afirmar((SELECT COUNT(*) FROM v_transferencias WHERE id_transferencia = @x AND tipo = 'SINPE' AND iban_origen = 'CR54015200004445556667' AND telefono_origen = '88881111') = 1)", 'OK');
+CALL sp_probar('SINPE real · de CR54 a su propio 88881111 (cuentas distintas)',
+  "CALL sp_transferir_sinpe(NULL, 'CR54015200004445556667', '88881111', 1000, 'prueba', @x)", 'OK');
+CALL sp_probar('SINPE real · usó 88882222 de origen, no el mismo número de destino',
+  "CALL sp_afirmar((SELECT telefono_origen FROM v_transferencias WHERE id_transferencia = @x) = '88882222')", 'OK');
+CALL sp_probar('SINPE real · IBAN 001 → 88882222 (afiliado a la misma cuenta)',
+  "CALL sp_transferir_sinpe(NULL, 'CR21015200001234567890', '88882222', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('SINPE real · desde la cuenta en USD',
+  "CALL sp_transferir_sinpe(NULL, 'CR47015200009876543210', '88883333', 10, 'prueba', @x)", 'ERROR');
+CALL sp_probar('SINPE real · número de origen sin afiliar (87776666)',
+  "CALL sp_transferir_sinpe('87776666', 'CR54015200004445556667', '88883333', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('SINPE real · número propio con cuenta de otro titular',
+  "CALL sp_transferir_sinpe('88881111', 'CR63081400005551112223', '83334444', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('SINPE real · titular sin ningún número afiliado (Laura)',
+  "CALL sp_transferir_sinpe(NULL, 'CR35081400002223334445', '88883333', 1000, 'prueba', @x)", 'ERROR');
 -- Trigger 4 · validación directa de transferencia
 CALL sp_probar('T4 · insert directo monto 0 (trigger)',
   "INSERT INTO transferencia (tipo, id_cuenta_origen, id_cuenta_destino, monto, saldo_origen_despues, saldo_destino_despues) VALUES ('IBAN', 1, 4, 0, 0, 0)", 'ERROR');
@@ -107,6 +126,49 @@ CALL sp_probar('Acceso · cliente nuevo con clave corta', "CALL sp_registrar_cli
 CALL sp_probar('Acceso · cliente nuevo crea su usuario', "CALL sp_registrar_cliente('9-9999-0002', 'Prueba Acceso', 'acceso2@correo.cr', 'clave123', @x)", 'OK');
 CALL sp_probar('Acceso · el usuario quedó ligado al cliente',
   "CALL sp_afirmar((SELECT COUNT(*) FROM usuario WHERE correo = 'acceso2@correo.cr' AND rol = 'CLIENTE' AND id_cliente IS NOT NULL) = 1)", 'OK');
+
+-- Regla 9 · una transferencia rechazada no deja rastro en el saldo
+CALL sp_probar('R9 · guardar saldo de IBAN 001', "SET @saldo_antes = (SELECT saldo FROM cuenta WHERE iban = 'CR21015200001234567890')", 'OK');
+CALL sp_probar('R9 · transferencia rechazada (saldo insuficiente)', "CALL sp_transferir_iban('CR21015200001234567890', 'CR63081400005551112223', 999999999, 'prueba', @x)", 'ERROR');
+CALL sp_probar('R9 · el saldo de origen no cambió',
+  "CALL sp_afirmar((SELECT saldo FROM cuenta WHERE iban = 'CR21015200001234567890') = @saldo_antes)", 'OK');
+-- Regla 8 · origen no activo
+CALL sp_probar('R8 · origen BLOQUEADA por IBAN', "CALL sp_transferir_iban('CR35081400002223334445', 'CR63081400005551112223', 1000, 'prueba', @x)", 'ERROR');
+-- Moneda fija si la cuenta ya tiene transferencias
+CALL sp_probar('2.3 · cambiar moneda de cuenta con transferencias', "UPDATE cuenta SET id_moneda = 2 WHERE iban = 'CR63081400005551112223'", 'ERROR');
+-- Informes 5.4 y 5.5 · período inválido
+CALL sp_probar('5.4 · movimientos con período invertido', "CALL sp_consultar_movimientos('CR21015200001234567890', '2026-12-31', '2026-01-01')", 'ERROR');
+-- Informe 5.6 · detecta un saldo alterado fuera de una transferencia
+CALL sp_probar('5.6 · conservación sin alteraciones',
+  "CALL sp_comprobar_conservacion('2000-01-01', CURDATE())", 'OK');
+CALL sp_probar('5.6 · el informe dice SE CONSERVA', "CALL sp_afirmar(@conservacion = 'SE CONSERVA')", 'OK');
+CALL sp_probar('5.6 · alterar el saldo de María con UPDATE directo',
+  "UPDATE cuenta SET saldo = saldo + 1000000 WHERE iban = 'CR88090100007778889990'", 'OK');
+CALL sp_probar('5.6 · conservación con saldo alterado',
+  "CALL sp_comprobar_conservacion('2000-01-01', CURDATE())", 'OK');
+CALL sp_probar('5.6 · el informe dice NO SE CONSERVA', "CALL sp_afirmar(@conservacion = 'NO SE CONSERVA')", 'OK');
+CALL sp_probar('5.6 · devolver el saldo de María',
+  "UPDATE cuenta SET saldo = saldo - 1000000 WHERE iban = 'CR88090100007778889990'", 'OK');
+-- sp_desafiliar_sinpe · deja evidencia y rechaza un teléfono sin afiliación
+CALL sp_probar('Desafiliar · 88883333', "CALL sp_desafiliar_sinpe('88883333')", 'OK');
+CALL sp_probar('Desafiliar · quedó el evento DESAFILIACION',
+  "CALL sp_afirmar((SELECT COUNT(*) FROM historial_afiliacion h JOIN telefono t USING (id_telefono) WHERE t.numero='88883333' AND h.tipo_evento='DESAFILIACION') = 1)", 'OK');
+CALL sp_probar('Desafiliar · teléfono sin afiliación', "CALL sp_desafiliar_sinpe('88883333')", 'ERROR');
+
+-- Cliente INACTIVO: conserva sus datos y puede recibir, pero no inicia operaciones
+CALL sp_probar('Inactivo · inactivar a María (procedimiento)', "CALL sp_actualizar_cliente('1-0987-0654', 'María Fernández Vargas', 'maria.fv@correo.cr', 'INACTIVO')", 'OK');
+CALL sp_probar('Inactivo · no puede enviar por SINPE',  "CALL sp_transferir_sinpe('83334444', NULL, '88881111', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('Inactivo · no puede enviar por IBAN',   "CALL sp_transferir_iban('CR88090100007778889990', 'CR21015200001234567890', 1000, 'prueba', @x)", 'ERROR');
+CALL sp_probar('Inactivo · sí puede recibir',           "CALL sp_transferir_iban('CR21015200001234567890', 'CR88090100007778889990', 1000, 'prueba', @x)", 'OK');
+CALL sp_probar('Inactivo · no reactiva cuentas (José)', "CALL sp_cambiar_estado_cuenta('CR12015200003334445556', 'ACTIVA', FALSE)", 'ERROR');
+CALL sp_probar('Inactivo · reactivar a María',          "CALL sp_actualizar_cliente('1-0987-0654', 'María Fernández Vargas', 'maria.fv@correo.cr', 'ACTIVO')", 'OK');
+CALL sp_probar('Cliente · correo inválido',             "CALL sp_actualizar_cliente('1-0987-0654', 'María Fernández Vargas', 'sin-arroba', 'ACTIVO')", 'ERROR');
+CALL sp_probar('Cliente · correo de otro cliente',      "CALL sp_actualizar_cliente('1-0987-0654', 'María Fernández Vargas', 'ana.rodriguez@correo.cr', 'ACTIVO')", 'ERROR');
+-- Catálogo de entidades
+CALL sp_probar('Entidad · registrar 0999',              "CALL sp_registrar_entidad('0999', 'Banco de Prueba')", 'OK');
+CALL sp_probar('Entidad · código repetido',             "CALL sp_registrar_entidad('0999', 'Otro nombre')", 'ERROR');
+CALL sp_probar('Entidad · código de 3 dígitos',         "CALL sp_registrar_entidad('099', 'Banco Corto')", 'ERROR');
+CALL sp_probar('Entidad · renombrar a un nombre usado', "CALL sp_renombrar_entidad('0999', 'JUNTAUCR')", 'ERROR');
 
 SELECT n, caso, esperado, obtenido, resultado, mensaje FROM resultado_prueba ORDER BY n;
 SELECT SUM(resultado = 'PASA') AS pasan, SUM(resultado = 'FALLA') AS fallan FROM resultado_prueba;

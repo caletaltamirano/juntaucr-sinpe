@@ -48,7 +48,7 @@ CALL sp_registrar_telefono('60001234', '3-0321-0111', @t);
 CALL sp_registrar_telefono('71112222', '1-1111-0222', @t);
 
 -- José queda inactivo después de registrar sus datos
-UPDATE cliente SET estado = 'INACTIVO' WHERE identificacion = '3-0321-0111';
+CALL sp_actualizar_cliente('3-0321-0111', 'José Ramírez Castro', 'jramirez@correo.cr', 'INACTIVO');
 
 -- Afiliaciones SINPE Móvil
 CALL sp_afiliar_sinpe('88881111', 'CR21015200001234567890');
@@ -62,10 +62,10 @@ CALL sp_cambiar_cuenta_sinpe('88881111', 'CR21015200001234567890');
 
 -- Transferencias del escenario
 CALL sp_transferir_iban ('CR21015200001234567890', 'CR63081400005551112223', 107500, 'Factura octubre', @x);
-CALL sp_transferir_sinpe('88883333', '83334444',  12500, 'Café',            @x);
-CALL sp_transferir_sinpe('83334444', '88882222',  60000, 'Préstamo',        @x);
+CALL sp_transferir_sinpe('88883333', NULL, '83334444',  12500, 'Café',            @x);
+CALL sp_transferir_sinpe('83334444', NULL, '88882222',  60000, 'Préstamo',        @x);
 CALL sp_transferir_iban ('CR88090100007778889990', 'CR21015200001234567890', 150000, 'Pago servicios', @x);
-CALL sp_transferir_sinpe('88881111', '88883333',  25000, 'Almuerzo',        @x);
+CALL sp_transferir_sinpe('88881111', NULL, '88883333',  25000, 'Almuerzo',        @x);
 
 -- Resultado esperado: Ana (IBAN 001) ₡850.000, Carlos ₡420.500, María ₡1.200.000
 -- SELECT iban, titular, saldo FROM v_cuentas;

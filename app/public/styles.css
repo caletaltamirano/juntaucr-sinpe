@@ -312,3 +312,51 @@ input.in::placeholder{color:var(--ink-3)}
 .cols>*{min-width:0}
 .pl{min-width:130px}
 .pair.lg .pa{font-size:18px}
+
+/* impresión: solo la hoja (comprobante, movimientos) */
+@media print{
+  body,.frame{background:#fff}
+  .frame{display:block}
+  .side,.top,.mf,.title .act,#toasts,#layer,.filters,.tabs{display:none !important}
+  .sheet{border:0;margin:0}
+  .content{padding:0}
+}
+
+/* celular: va al final para ganarle a los ajustes de arriba */
+@media (max-width:760px){
+  .frame{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto 1fr}
+  .side{grid-row:auto;flex-direction:row;flex-wrap:wrap;gap:4px;padding:8px 8px 0}
+  .side .ws{width:100%;margin:0 0 4px}
+  .side .nav{height:32px;padding:0 10px}
+  .top{padding:6px 16px;min-height:40px}
+  .crumbs{min-width:0}
+  .envt{display:none}
+  .sheet{margin:0 8px 8px;min-height:0}
+  .title .act{flex-wrap:wrap}
+  .figs{flex-direction:column}
+  .fig,.fig + .fig{padding:12px 0;border-left:0}
+  .fig + .fig{border-top:1px solid var(--line)}
+  .pair.fix{grid-template-columns:minmax(0,max-content) 1fr minmax(0,max-content)}
+  .pl{min-width:60px}
+  .bh{flex-wrap:wrap}
+  .login{padding:16px}
+  .login-card{width:100%;padding:24px}
+  .vee{width:100%}
+  .toasts{left:16px;right:16px}
+  .toast{min-width:0}
+}
+
+/* avisos arriba al centro: abajo a la derecha tapaban el botón principal de los paneles */
+.toasts{top:14px;bottom:auto;left:50%;right:auto;transform:translateX(-50%);align-items:center}
+@keyframes pop2{from{opacity:0;transform:translateY(-8px)}}
+@media (max-width:760px){.toasts{left:16px;right:16px;transform:none}}
+
+/* listas de transferencias del inicio: en celular cada fila se apila (fecha arriba, par SINPE abajo) */
+@media (max-width:760px){
+  .feed tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line)}
+  .feed td{width:auto !important;border:0 !important;padding:4px 20px}
+  .feed td:first-child{padding-top:12px}
+  .feed td:last-child{padding-bottom:12px}
+  .feed .pair.fix{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+  .feed .pn,.feed .ps{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}

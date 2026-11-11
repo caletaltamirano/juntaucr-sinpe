@@ -114,9 +114,11 @@ const NAV_CLIENTE = [
 ];
 // Rutas que solo puede abrir la administración
 const SOLO_ADMIN = ['clientes', 'cliente', 'cuentaNueva', 'catalogos'];
-const shell = (activo, migas, cuerpo) => `<div class="frame">
+// La administración no es una entidad financiera: controla todo el sistema (como un banco central).
+const nombreSesion = () => esAdmin() ? 'Administración' : estado.usuario?.entidad || 'SINPE Móvil';
+const shell = (activo, migas, cuerpo) => (document.title = `${nombreSesion()} · SINPE Móvil`, `<div class="frame">
   <aside class="side">
-    <div class="ws">${MARK()}<div><div class="t">${esAdmin() ? 'JUNTAUCR' : esc(estado.usuario?.entidad)}</div>${esAdmin() ? '<div class="s">Administración SINPE</div>' : ''}</div></div>
+    <div class="ws">${MARK()}<div><div class="t">${esc(nombreSesion())}</div>${esAdmin() ? '<div class="s">Todas las entidades</div>' : ''}</div></div>
     ${(esAdmin() ? NAV_ADMIN : NAV_CLIENTE).map(([g, items]) => `<div class="grp">${g}</div>${items.map(([id, t, i]) => `<a class="nav${id === activo ? ' on' : ''}" href="#/${id}">${ic(i)}${t}</a>`).join('')}`).join('')}
     <div class="me"><span class="av" style="background:#fff;color:var(--accent)">${esc(ini(estado.usuario?.nombre || 'AO'))}</span><div style="min-width:0;flex:1"><div class="t">${esc(estado.usuario?.nombre)}</div><div class="s">${esc(estado.usuario?.correo)}</div></div>
       <button class="btn s q" id="salir" title="Salir" aria-label="Salir">${ic('out')}</button></div>
@@ -126,7 +128,7 @@ const shell = (activo, migas, cuerpo) => `<div class="frame">
     <form class="search" id="buscar" role="search"${esAdmin() ? '' : ' style="visibility:hidden"'}>${ic('search')}<input aria-label="Buscar" placeholder="Buscar cliente, IBAN o teléfono" style="border:0;background:transparent;font:inherit;flex:1;outline:none;color:var(--ink)"><span class="kbd">Enter</span></form>
     <div class="envt"><i></i>Simulación · datos ficticios</div>
   </header>
-  <main class="sheet"><div class="content" id="contenido">${cuerpo}</div></main></div>`;
+  <main class="sheet"><div class="content" id="contenido">${cuerpo}</div></main></div>`);
 const cr = (...p) => p.map((x, i) => i === p.length - 1 ? `<b>${esc(x[0])}</b>` : `<a href="#${x[1]}">${esc(x[0])}</a><span class="sep">/</span>`).join('');
 const title = (h, p, act = '') => `<div class="title"><div><h1>${h}</h1>${p ? `<p>${p}</p>` : ''}</div>${act ? `<div class="act">${act}</div>` : ''}</div>`;
 const fld = (label, control, o = {}) => `<div class="field${o.s2 ? ' s2' : ''}"><label${o.for ? ` for="${o.for}"` : ''}>${label}</label>${control}${o.hint !== undefined ? `<div class="hint${o.hk ? ' ' + o.hk : ''}"${o.hid ? ` id="${o.hid}"` : ''}>${o.hint}</div>` : ''}</div>`;
@@ -149,7 +151,7 @@ R.login = async () => {
     <form class="login-card" id="f">
       <div style="display:flex;align-items:center;gap:10px">${MARK(32)}<div><div class="b" style="font-size:16px" id="marca">SINPE Móvil</div><div class="xs ink2">Ingreso</div></div></div>
       <div><h1>Ingresar</h1><p class="ink2" style="margin-top:4px">Elija su entidad financiera e ingrese con su usuario.</p></div>
-      ${fld('Entidad financiera', `<select class="in" id="ent" required><option value="">Elija una entidad</option>${entidades.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre)}</option>`).join('')}<option value="ADMIN">Administración JUNTAUCR</option></select>`, {for:'ent'})}
+      ${fld('Entidad financiera', `<select class="in" id="ent" required><option value="">Elija una entidad</option>${entidades.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre)}</option>`).join('')}<option value="ADMIN">Administración del sistema</option></select>`, {for:'ent'})}
       ${fld('Correo', '<input class="in" id="correo" type="email" autocomplete="username" required>', {for:'correo'})}
       ${fld('Contraseña', '<input class="in" id="clave" type="password" autocomplete="current-password" required>', {for:'clave', hint:'Prueba: ana.rodriguez@correo.cr · juntaucr2026 (entidad JUNTAUCR). Administración: admin@juntaucr.cr · juntaucr2026'})}
       <div id="err"></div>
@@ -167,7 +169,7 @@ R.login = async () => {
   $('#ent').onchange = e => {
     const v = e.target.value, o = e.target.selectedOptions[0];
     setTema(v && v !== 'ADMIN' ? v : '');
-    $('#marca').textContent = v === 'ADMIN' ? 'JUNTAUCR' : v ? o.textContent : 'SINPE Móvil';
+    $('#marca').textContent = v === 'ADMIN' ? 'Administración' : v ? o.textContent : 'SINPE Móvil';
   };
   $('#ent').focus();
 };
@@ -183,14 +185,14 @@ R.inicioCliente = async () => {
   <div class="figs">
     <div class="fig"><div class="k">Mis cuentas</div><div class="v num">${cuentas.length}</div><div class="n">en ${esc(u.entidad)}</div></div>
     <div class="fig"><div class="k">Saldo en colones</div><div class="v num">${fm(tot('CRC'))}</div>${tot('USD') ? `<div class="n">más ${fm(tot('USD'), 'USD')}</div>` : ''}</div>
-    <div class="fig"><div class="k">Teléfonos</div><div class="v num">${tels.length}</div><div class="n">${nAf} afiliados a SINPE Móvil</div></div>
+    <div class="fig"><div class="k">Teléfonos</div><div class="v num">${tels.length}</div><div class="n">${plural(nAf, "afiliado", "afiliados")} a SINPE Móvil</div></div>
   </div>
   <div class="cols c21">
     <div class="block"><div class="bh"><h2>Mis últimas transferencias</h2><div class="act"><a class="btn q" href="#/movimientos">Ver movimientos</a></div></div>
-      ${movs.length ? `<table><tbody>${movs.map(t => `<tr><td style="width:120px" class="ink2">${num(fdh(t.fecha))}</td><td style="width:100%">${trPair(t, 'fix')}</td><td class="sm ink2">${t.tipo === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td></tr>`).join('')}</tbody></table>` : vacio('Todavía no tiene transferencias.')}
+      ${movs.length ? `<table class="feed"><tbody>${movs.map(t => `<tr><td style="width:96px" class="ink2"><div class="num">${num(fd(t.fecha))}</div><div class="xs">${num(hora(t.fecha))} · ${t.tipo === 'SINPE' ? 'SINPE' : 'IBAN'}</div></td><td style="width:100%">${trPair(t, 'fix')}</td></tr>`).join('')}</tbody></table>` : vacio('Todavía no tiene transferencias.')}
     </div>
     <div class="block"><div class="bh"><h2>Mis cuentas</h2></div>
-      ${cuentas.length ? `<table><tbody>${cuentas.map(a => `<tr class="go" data-href="/cuentas/${a.iban}"><td><div class="b num">${gi(a.iban)}</div><div class="xs ink2">${cur(a.moneda)} · ${st(a.estado)}</div></td><td class="r b num">${fm(a.saldo, a.moneda)}</td></tr>`).join('')}</tbody></table>` : vacio('No tiene cuentas en esta entidad.')}
+      ${cuentas.length ? `<table><tbody>${cuentas.map(a => `<tr class="go" data-href="/cuentas/${a.iban}"><td><div class="b num">${sh(a.iban)}</div><div class="xs ink2">${cur(a.moneda)} · ${st(a.estado)}</div></td><td class="r b num">${fm(a.saldo, a.moneda)}</td></tr>`).join('')}</tbody></table>` : vacio('No tiene cuentas en esta entidad.')}
     </div>
   </div>`);
 };
@@ -214,13 +216,13 @@ R.inicio = async () => {
   <div class="figs">
     <div class="fig"><div class="k">Clientes</div><div class="v num">${d.clientes.total}</div><div class="n">${d.clientes.activos} activos</div></div>
     <div class="fig"><div class="k">Cuentas IBAN</div><div class="v num">${nCuentas}</div><div class="n">${plural(ce.ACTIVA || 0, 'activa', 'activas')}, ${plural(ce.INACTIVA || 0, 'inactiva', 'inactivas')}, ${plural(ce.BLOQUEADA || 0, 'bloqueada', 'bloqueadas')}</div></div>
-    <div class="fig"><div class="k">Teléfonos</div><div class="v num">${d.telefonos.total}</div><div class="n">${d.telefonos.afiliados} afiliados a SINPE Móvil</div></div>
+    <div class="fig"><div class="k">Teléfonos</div><div class="v num">${d.telefonos.total}</div><div class="n">${plural(d.telefonos.afiliados, "afiliado", "afiliados")} a SINPE Móvil</div></div>
     <div class="fig"><div class="k">Saldo en colones</div><div class="v num">${fm(crc?.total)}</div><div class="n">${usd ? `más ${fm(usd.total, 'USD')} en ${plural(usd.n, 'cuenta USD', 'cuentas USD')}` : 'sin cuentas en dólares'}</div></div>
   </div>
   <div class="cols c21">
     <div class="block"><div class="bh"><h2>Transferencias recientes</h2><div class="act"><a class="btn q" href="#/movimientos">Ver movimientos</a></div></div>
       ${d.recientes.length ? Object.entries(grupos).map(([f, ts]) => `<div style="padding:4px 20px 0;text-transform:capitalize" class="sm ink2 b">${etiqueta(f)}</div>
-        <table><tbody>${ts.map(t => `<tr><td style="width:64px" class="ink2">${num(hora(t.fecha))}</td><td style="width:100%">${trPair(t, 'fix')}</td><td class="sm ink2" style="width:90px">${t.tipo === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td></tr>`).join('')}</tbody></table>`).join('')
+        <table class="feed"><tbody>${ts.map(t => `<tr><td style="width:64px" class="ink2">${num(hora(t.fecha))}</td><td style="width:100%">${trPair(t, 'fix')}</td><td class="sm ink2" style="width:90px">${t.tipo === 'SINPE' ? 'SINPE Móvil' : 'IBAN'}</td></tr>`).join('')}</tbody></table>`).join('')
       : vacio('Todavía no hay transferencias.')}
     </div>
     <div class="block"><div class="bh"><h2>Por atender</h2></div><div class="bb">
@@ -239,7 +241,7 @@ function panelCliente(c) {
     ${fld('Nombre completo', `<input class="in" id="c-n" required value="${esc(c?.nombre_completo)}">`, {for:'c-n'})}
     ${fld('Correo electrónico', `<input class="in" id="c-e" type="email" required value="${esc(c?.correo)}">`, {for:'c-e'})}
     ${nuevo ? fld('Clave inicial', '<input class="in" id="c-k" type="text" required minlength="6" value="juntaucr2026" autocomplete="off">', {for:'c-k', hint:'Con el correo y esta clave el cliente ingresa a la aplicación. Mínimo 6 caracteres.'}) : ''}
-    ${nuevo ? '' : fld('Estado', `<select class="in" id="c-s"><option${c.estado === 'ACTIVO' ? ' selected' : ''}>ACTIVO</option><option${c.estado === 'INACTIVO' ? ' selected' : ''}>INACTIVO</option></select>`, {for:'c-s'})}
+    ${nuevo ? '' : fld('Estado', `<select class="in" id="c-s"><option${c.estado === 'ACTIVO' ? ' selected' : ''}>ACTIVO</option><option${c.estado === 'INACTIVO' ? ' selected' : ''}>INACTIVO</option></select>`, {for:'c-s', hint:'Inactivo: conserva sus datos y puede recibir dinero, pero no ingresa ni inicia operaciones.'})}
     ${nuevo ? nota('', 'La fecha de registro se asigna al guardar. Cuentas y teléfonos se agregan desde la ficha del cliente.') : ''}
     <div id="err"></div><button type="submit" hidden></button></form>`,
     `<button class="btn" data-cerrar>Cancelar</button><button class="btn pri" id="ok">${nuevo ? 'Guardar cliente' : 'Guardar cambios'}</button>`,
@@ -288,13 +290,14 @@ R.cliente = async ([id]) => {
   const html = shell('clientes', cr(['Clientes', '/clientes'], [c.nombre_completo]), `
     <div class="title"><div class="who" style="gap:16px">${av(c.nombre_completo, 1)}<div><h1>${esc(c.nombre_completo)}</h1><p>${num(c.identificacion)} · ${esc(c.correo)} · cliente desde ${num(fd(c.fecha_registro))}</p></div></div>
       <div class="act" style="align-items:center">${st(c.estado)}<button class="btn" id="editar">Editar</button>${c.estado === 'ACTIVO' ? `<a class="btn pri" href="#/cuentas/nueva?cliente=${encodeURIComponent(c.identificacion)}">${ic('plus')}Nueva cuenta</a>` : ''}</div></div>
+    ${c.estado === 'INACTIVO' ? nota('warn', 'Cliente inactivo: conserva sus datos y puede recibir dinero, pero no ingresa a la aplicación, no envía, no afilia, no abre cuentas ni registra teléfonos.') : ''}
     <div class="cols c32">
       <div class="block"><div class="bh"><h2>Cuentas IBAN</h2><span class="sm ink2">${cuentas.length}</span></div>${cuentas.length ? `<table>
         <thead><tr><th>IBAN</th><th>Moneda</th><th class="r">Saldo</th><th class="r">Tel. afiliados</th><th>Estado</th></tr></thead>
         <tbody>${cuentas.map(a => `<tr class="go" data-href="/cuentas/${a.iban}"><td><div class="b num">${gi(a.iban)}</div><div class="xs ink2">${esc(a.entidad)}</div></td><td>${cur(a.moneda)}</td><td class="r b num">${fm(a.saldo, a.moneda)}</td><td class="r">${num(a.telefonos_afiliados)}</td><td>${st(a.estado)}</td></tr>`).join('')}</tbody></table>` : vacio('Este cliente no tiene cuentas.')}</div>
       <div class="block"><div class="bh"><h2>Teléfonos</h2><span class="sm ink2">${telefonos.length}</span><div class="act">${c.estado === 'ACTIVO' ? `<button class="btn s" id="regtel">${ic('plus')}Registrar</button>` : ''}</div></div><div class="bb">
         ${telefonos.length ? telefonos.map(t => `<div class="ph-row"><div class="g"><div class="b num">${tel(t.numero)}</div>${t.afiliado === 'SI' ? `<div class="sm ink2 link">${af(1)}<i></i>${num(sh(t.iban_afiliado))}</div>` : `<div class="sm">${af(0)}</div>`}</div>
-          ${t.afiliado === 'SI' ? '' : `<a class="btn s pri" href="#/sinpe?numero=${t.numero}">Afiliar</a>`}<a class="btn s" href="#/sinpe/historial/${t.numero}">Historial</a></div>`).join('') : vacio('Sin teléfonos registrados.')}
+          ${t.afiliado === 'SI' || c.estado !== 'ACTIVO' ? '' : `<a class="btn s pri" href="#/sinpe?numero=${t.numero}">Afiliar</a>`}<a class="btn s" href="#/sinpe/historial/${t.numero}">Historial</a></div>`).join('') : vacio('Sin teléfonos registrados.')}
         ${compartidas.map(([i, ns]) => `<div style="margin-top:12px">${nota('', `${ns.map(tel).join(' y ')} están en la misma cuenta (${sh(i)}), así que no pueden transferirse entre sí.`)}</div>`).join('')}
       </div></div>
     </div>`);
@@ -308,7 +311,7 @@ R.cliente = async ([id]) => {
 R.cuentas = async (p, qs) => {
   const lista = await GET('/api/cuentas');
   const tot = m => lista.filter(a => a.moneda === m).reduce((s, a) => s + a.saldo, 0);
-  const html = shell('cuentas', cr(['Cuentas IBAN']), title(esAdmin() ? 'Cuentas IBAN' : 'Mis cuentas', `${plural(lista.length, 'cuenta', 'cuentas')}. ${fm(tot('CRC'))} en colones y ${fm(tot('USD'), 'USD')} en dólares.`, esAdmin() ? `<a class="btn pri" href="#/cuentas/nueva">${ic('plus')}Nueva cuenta</a>` : '') + `
+  const html = shell('cuentas', cr([esAdmin() ? 'Cuentas IBAN' : 'Mis cuentas']), title(esAdmin() ? 'Cuentas IBAN' : 'Mis cuentas', `${plural(lista.length, 'cuenta', 'cuentas')}. ${fm(tot('CRC'))} en colones y ${fm(tot('USD'), 'USD')} en dólares.`, esAdmin() ? `<a class="btn pri" href="#/cuentas/nueva">${ic('plus')}Nueva cuenta</a>` : '') + `
     <div class="toolbar"><div class="searchbox">${ic('search')}<input class="in" id="q" placeholder="IBAN o titular" value="${esc(qs.get('q'))}"></div>
       <div class="seg" id="seg"><span class="on" data-v="">Todas</span><span data-v="CRC">CRC</span><span data-v="USD">USD</span></div>
       <select class="in" id="est" style="min-height:34px;width:180px" aria-label="Estado"><option value="">Estado: todos</option><option>ACTIVA</option><option>INACTIVA</option><option>BLOQUEADA</option></select></div>
@@ -340,7 +343,7 @@ R.cuentaNueva = async (p, qs) => {
         ${fld('Entidad financiera', `<select class="in" id="ent">${opts(cat.entidades, e => e.codigo, e => `${e.nombre} (${e.codigo})`, '0152')}</select>`, {for:'ent'})}
         ${fld('Moneda', `<select class="in" id="mon">${opts(cat.monedas, m => m.codigo, m => `${m.codigo} · ${m.descripcion}`, 'CRC')}</select>`, {for:'mon'})}
         ${fld('IBAN', '<input class="in num b" id="iban" required maxlength="27" placeholder="CR00 0152 0000 0000 0000 00" autocomplete="off">', {s2:1, for:'iban', hint:'22 caracteres: CR seguido de 20 dígitos.', hid:'ibanh'})}
-        ${fld('Saldo inicial', '<div class="money"><span class="pre" id="sim">₡</span><input class="in num" id="saldo" type="number" min="0" step="0.01" value="0" required></div>', {for:'saldo'})}
+        ${fld('Saldo inicial', '<div class="money"><span class="pre" id="sim">₡</span><input class="in num" id="saldo" type="number" min="0" step="0.01" value="0" required onfocus="this.select()"></div>', {for:'saldo'})}
         ${fld('Fecha de apertura', `<input class="in num" id="fecha" type="date" max="${hoyISO()}" value="${hoyISO()}">`, {for:'fecha'})}
         ${fld('Estado', '<select class="in" id="est"><option>ACTIVA</option><option>INACTIVA</option><option>BLOQUEADA</option></select>', {for:'est'})}
         <div></div>
@@ -379,7 +382,7 @@ function modalEstadoCuenta(c) {
   abrirCapa('modal', 'Cambiar estado de la cuenta', `<div class="stack" style="gap:16px">
       <p class="ink2">${gi(c.iban)} · ${esc(c.titular)}. Estado actual: ${st(c.estado)}</p>
       ${fld('Nuevo estado', `<select class="in" id="ne">${['ACTIVA', 'INACTIVA', 'BLOQUEADA'].filter(s => s !== c.estado).map(s => `<option>${s}</option>`).join('')}</select>`, {for:'ne'})}
-      ${c.telefonos_afiliados ? `<label class="ck" style="cursor:pointer"><input type="checkbox" id="des" style="margin-top:3px"><div>Desafiliar los ${plural(c.telefonos_afiliados, 'teléfono afiliado', 'teléfonos afiliados')} si la cuenta deja de estar activa. Queda en el historial.</div></label>` : ''}
+      ${c.telefonos_afiliados ? `<label class="ck" style="cursor:pointer"><input type="checkbox" id="des" style="margin-top:3px"><div>${c.telefonos_afiliados === 1 ? 'Desafiliar el teléfono afiliado' : `Desafiliar los ${c.telefonos_afiliados} teléfonos afiliados`} si la cuenta deja de estar activa. Queda en el historial.</div></label>` : ''}
       <div id="err"></div></div>`,
     `<button class="btn" data-cerrar>Cancelar</button><button class="btn pri" id="ok">Cambiar estado</button>`,
     () => $('#ok').onclick = () => accion($('#ok'), async () => {
@@ -391,14 +394,15 @@ function modalEstadoCuenta(c) {
 R.cuenta = async ([iban]) => {
   const {cuenta: c, telefonos, movimientos, mes} = await GET('/api/cuentas/' + iban);
   const vig = telefonos.filter(t => t.situacion === 'VIGENTE'), ant = telefonos.filter(t => t.situacion !== 'VIGENTE');
-  const html = shell('cuentas', cr(['Cuentas IBAN', '/cuentas'], [sh(c.iban)]), `
+  const html = shell('cuentas', cr([esAdmin() ? 'Cuentas IBAN' : 'Mis cuentas', '/cuentas'], [sh(c.iban)]), `
     <div class="title"><div><h1 class="num">${gi(c.iban)}</h1><p><span class="who" style="display:inline-flex;gap:8px;vertical-align:middle">${av(c.titular)}${esAdmin() ? `<a href="#/clientes/${c.id_cliente}">${esc(c.titular)}</a>` : esc(c.titular)}</span> · ${esc(c.entidad)} · ${cur(c.moneda)} · abierta ${num(fd(c.fecha_apertura))}</p></div>
-      <div class="act" style="align-items:center">${st(c.estado)}${esAdmin() ? '<button class="btn" id="estado">Cambiar estado</button>' : ''}${c.estado === 'ACTIVA' ? `<a class="btn pri" href="#/transferir/iban?origen=${c.iban}">${ic('swap')}Transferir</a>` : ''}</div></div>
+      <div class="act" style="align-items:center">${st(c.estado)}${esAdmin() ? '<button class="btn" id="estado">Cambiar estado</button>' : ''}${c.estado === 'ACTIVA' && c.estado_cliente === 'ACTIVO' ? `<a class="btn pri" href="#/transferir/iban?origen=${c.iban}">${ic('swap')}Transferir</a>` : ''}</div></div>
+    ${c.estado_cliente === 'INACTIVO' ? nota('warn', `${esc(c.titular)} está inactivo: la cuenta puede recibir dinero, pero no enviar ni afiliar teléfonos.`) : ''}
     <div class="figs"><div class="fig"><div class="k">Saldo disponible</div><div class="big num">${fm(c.saldo, c.moneda)}</div></div>
-      <div class="fig"><div class="k">Recibido este mes</div><div class="v num pos">+${fm(mes.total_recibido, c.moneda)}</div><div class="n">${plural(mes.cantidad_recibidas, 'transferencia', 'transferencias')}</div></div>
-      <div class="fig"><div class="k">Enviado este mes</div><div class="v num">−${fm(mes.total_enviado, c.moneda)}</div><div class="n">${plural(mes.cantidad_enviadas, 'transferencia', 'transferencias')}</div></div></div>
+      <div class="fig"><div class="k">Recibido este mes</div><div class="v num${mes.total_recibido ? ' pos' : ''}">${mes.total_recibido ? '+' : ''}${fm(mes.total_recibido, c.moneda)}</div><div class="n">${plural(mes.cantidad_recibidas, 'transferencia', 'transferencias')}</div></div>
+      <div class="fig"><div class="k">Enviado este mes</div><div class="v num">${mes.total_enviado ? '−' : ''}${fm(mes.total_enviado, c.moneda)}</div><div class="n">${plural(mes.cantidad_enviadas, 'transferencia', 'transferencias')}</div></div></div>
     <div class="cols c12">
-      <div class="block"><div class="bh"><h2>Teléfonos afiliados</h2><span class="sm ink2">${vig.length}</span><div class="act">${c.estado === 'ACTIVA' && c.moneda === 'CRC' ? `<a class="btn s" href="#/sinpe?cliente=${c.id_cliente}">${ic('plus')}Afiliar</a>` : ''}</div></div><div class="bb">
+      <div class="block"><div class="bh"><h2>Teléfonos afiliados</h2><span class="sm ink2">${vig.length}</span><div class="act">${c.estado === 'ACTIVA' && c.moneda === 'CRC' && c.estado_cliente === 'ACTIVO' ? `<a class="btn s" href="#/sinpe?cliente=${c.id_cliente}">${ic('plus')}Afiliar</a>` : ''}</div></div><div class="bb">
         ${vig.length ? vig.map(t => `<div class="ph-row"><div class="g"><div class="b num">${tel(t.numero)}</div><div class="xs ink2">desde ${num(fdh(t.afiliado_desde))}</div></div><button class="btn s" data-trasladar="${t.numero}">Trasladar</button><button class="btn s neg" data-desafiliar="${t.numero}">Desafiliar</button></div>`).join('')
           : `<div class="sm ink2" style="padding:8px 0">${c.moneda !== 'CRC' ? 'Las cuentas en dólares no se afilian a SINPE Móvil.' : c.estado !== 'ACTIVA' ? 'La cuenta no está activa, así que no puede tener afiliaciones.' : 'Ningún teléfono afiliado.'}</div>`}
         ${vig.length > 1 ? '<div class="xs ink2" style="padding-top:10px">Comparten esta cuenta, así que no pueden transferirse entre sí.</div>' : ''}
@@ -411,7 +415,7 @@ R.cuenta = async ([iban]) => {
       </tbody></table>` : vacio('Sin movimientos.')}</div>
     </div>`);
   return [html, () => {
-    $('#estado').onclick = () => modalEstadoCuenta(c);
+    $('#estado') && ($('#estado').onclick = () => modalEstadoCuenta(c));
     $$('[data-trasladar]').forEach(b => b.onclick = () => modalTrasladar(b.dataset.trasladar));
     $$('[data-desafiliar]').forEach(b => b.onclick = () => modalDesafiliar(b.dataset.desafiliar, c.iban, c.titular));
   }];
@@ -455,7 +459,7 @@ R.telefonos = async () => {
   const lista = await GET('/api/telefonos');
   const nAf = lista.filter(t => t.afiliado === 'SI').length;
   const porque = t => t.estado_cliente === 'INACTIVO' ? 'El cliente está inactivo' : t.cuentas_validas === 0 ? 'No tiene cuentas activas en colones' : '';
-  const html = shell('telefonos', cr(['Teléfonos']), title('Teléfonos', 'Registrar un número no lo afilia a SINPE Móvil; la afiliación es un paso aparte.', `<button class="btn pri" id="nuevo">${ic('plus')}Registrar teléfono</button>`) + `
+  const html = shell('telefonos', cr([esAdmin() ? 'Teléfonos' : 'Mis teléfonos']), title(esAdmin() ? 'Teléfonos' : 'Mis teléfonos', 'Registrar un número no lo afilia a SINPE Móvil; la afiliación es un paso aparte.', `<button class="btn pri" id="nuevo">${ic('plus')}Registrar teléfono</button>`) + `
     <div class="tabs" id="tabs"><div class="tab on" data-v="">Todos <span class="c">${lista.length}</span></div><div class="tab" data-v="SI">Afiliados <span class="c">${nAf}</span></div><div class="tab" data-v="NO">Sin afiliar <span class="c">${lista.length - nAf}</span></div></div>
     <div class="block"><table>
       <thead><tr><th>Número</th><th>Titular</th><th>Afiliación SINPE Móvil</th><th>Desde</th><th class="r"></th></tr></thead>
@@ -549,7 +553,7 @@ R.sinpe = async (p, qs) => {
     $$('[data-desafiliar]').forEach(b => { const t = afil.find(x => x.numero === b.dataset.desafiliar); b.onclick = () => modalDesafiliar(t.numero, t.iban_afiliado, t.titular); });
     if (!libres.length) return;
     let elegida = '';
-    const razon = c => c.moneda !== 'CRC' ? 'No se puede: la cuenta es en USD' : c.estado !== 'ACTIVA' ? `No se puede: la cuenta está ${c.estado.toLowerCase()}` : '';
+    const razon = c => c.estado_cliente !== 'ACTIVO' ? 'No se puede: el cliente está inactivo' : c.moneda !== 'CRC' ? 'No se puede: la cuenta es en USD' : c.estado !== 'ACTIVA' ? `No se puede: la cuenta está ${c.estado.toLowerCase()}` : '';
     const pintar = () => {
       const t = libres.find(x => x.numero === $('#ft').value);
       elegida = '';
@@ -607,36 +611,45 @@ const transferTabs = on => `<div class="tabs"><a class="tab${on === 'tel' ? ' on
 R.transferir = async () => {
   const [todos, cuentas] = await Promise.all([GET('/api/telefonos'), GET('/api/cuentas')]);
   const tels = todos.filter(t => t.afiliado === 'SI');
-  // Cuentas desde las que se puede enviar por SINPE Móvil: las que tienen algún teléfono afiliado
-  const origenes = cuentas.filter(c => tels.some(t => t.iban_afiliado === c.iban));
-  const previo = tels.find(t => t.numero === estado.transferencia?.origen);
+  const previo = estado.transferencia?.tipo === 'tel' ? estado.transferencia.origen : null;
+  // Como en SINPE Móvil real:
+  // · Cliente: elige CUALQUIERA de sus cuentas activas en colones y solo escribe el número de destino.
+  //   Basta con tener un número afiliado (en cualquier entidad); eso lo valida sp_transferir_sinpe,
+  //   que recibe el IBAN elegido y resuelve el número de origen.
+  // · Administración: no es dueña de números; elige el teléfono de origen para simular a un cliente
+  //   y se debita la cuenta afiliada a ese teléfono (forma del enunciado 2.8).
+  const origenes = esAdmin()
+    ? cuentas.filter(c => c.estado_cliente === 'ACTIVO' && tels.some(t => t.iban_afiliado === c.iban))
+    : cuentas.filter(c => c.estado_cliente === 'ACTIVO' && c.estado === 'ACTIVA' && c.moneda === 'CRC');
+  if (!origenes.length) return shell('transferir', cr(['Transferir']), title('Transferir', 'El dinero sale y entra en un mismo paso. Si algo falla, no se mueve nada.') + transferTabs('tel') + `
+    <div class="block"><div class="bb" style="padding-top:20px">${nota('warn', esAdmin() ? 'No hay cuentas con un teléfono afiliado a SINPE Móvil.' : 'SINPE Móvil necesita una cuenta activa en colones y usted no tiene ninguna en esta entidad. Puede usar la pestaña <b>Por IBAN</b>.')}
+      <div style="margin-top:14px;display:flex;gap:8px"><a class="btn pri" href="#/sinpe">${ic('link')}Ir a SINPE Móvil</a><a class="btn" href="#/transferir/iban">Transferir por IBAN</a></div></div></div>`);
+  const ayudaCliente = tels.length ? '' : `<div style="margin-bottom:4px">${nota('warn', 'Para enviar por SINPE Móvil necesita tener un número afiliado. Si lo tiene afiliado en otra entidad, puede seguir.')}</div>`;
+  let origenControl;
+  if (esAdmin()) {
+    const desdeTels = tels.filter(t => origenes.some(c => c.iban === t.iban_afiliado));
+    origenControl = fld('Desde el teléfono', `<select class="in num" id="o" required><option value="">Elija el número que envía</option>${desdeTels.map(t => `<option value="${t.numero}"${t.numero === previo ? ' selected' : ''}>${tel(t.numero)} · ${esc(first(t.titular))}</option>`).join('')}</select>`, {for:'o', hint:'', hid:'oh'});
+  } else if (origenes.length === 1) {
+    origenControl = ayudaCliente + fld('Sale de', `<div class="in num">${gi(origenes[0].iban)}</div><input type="hidden" id="o" value="${origenes[0].iban}">`, {hint:'', hid:'oh'});
+  } else {
+    const sel = origenes.some(c => c.iban === previo) ? previo : origenes[0].iban;
+    origenControl = ayudaCliente + fld('Sale de la cuenta', `<select class="in num" id="o">${origenes.map(c => `<option value="${c.iban}"${c.iban === sel ? ' selected' : ''}>${gi(c.iban)}</option>`).join('')}</select>`, {for:'o', hint:'', hid:'oh'});
+  }
   const html = shell('transferir', cr(['Transferir']), title('Transferir', 'El dinero sale y entra en un mismo paso. Si algo falla, no se mueve nada.') + transferTabs('tel') + `
     <div class="cols c2">
       <div class="block"><form class="bb stack" style="gap:18px;padding-top:20px" id="f">
-        ${fld('Desde mi cuenta', `<select class="in num" id="c" required><option value="">Elija la cuenta de origen</option>${origenes.map(c => `<option value="${c.iban}"${previo?.iban_afiliado === c.iban ? ' selected' : ''}>${gi(c.iban)} · ${esc(first(c.titular))} · ${fm(c.saldo, c.moneda)}</option>`).join('')}</select>`, {for:'c', hint:'', hid:'oh'})}
-        <div id="telo" hidden>${fld('Con el teléfono', '<select class="in num" id="o"></select>', {for:'o', hint:'Esta cuenta tiene varios teléfonos afiliados.'})}</div>
+        ${origenControl}
         ${fld('Para', `<input class="in num b" id="d" inputmode="numeric" maxlength="9" placeholder="8888-3333" required value="${tel(estado.transferencia?.destino || '')}">`, {for:'d', hint:'Número de 8 dígitos afiliado a SINPE Móvil.', hid:'dh'})}
         <div class="form">${fld('Monto', `<div class="money"><span class="pre">₡</span><input class="in num b" id="m" type="number" min="0.01" step="0.01" required value="${estado.transferencia?.monto || ''}"></div>`, {for:'m'})}${fld('Detalle', `<input class="in" id="det" maxlength="140" placeholder="Opcional" value="${esc(estado.transferencia?.detalle)}">`, {for:'det'})}</div>
         <button class="btn pri l" type="submit">Revisar transferencia</button>
       </form></div>
       <div class="block" style="background:var(--sub);border-color:transparent"><div class="bb" style="padding-top:24px" id="prev"></div></div>
     </div>`);
-  return [html, () => {
-    // El procedimiento recibe el teléfono; la persona solo elige la cuenta.
-    // Si la cuenta tiene un único teléfono afiliado se usa ese; si tiene varios, se pregunta cuál.
-    const llenar = () => {
-      const delIban = tels.filter(t => t.iban_afiliado === $('#c').value);
-      $('#o').innerHTML = delIban.map(t => `<option value="${t.numero}"${t.numero === previo?.numero ? ' selected' : ''}>${tel(t.numero)}</option>`).join('');
-      $('#telo').hidden = delIban.length < 2;
-    };
-    llenar();
-    vistaPrevia('tel');
-    $('#c').addEventListener('change', () => { llenar(); $('#o').dispatchEvent(new Event('change')); });
-  }];
+  return [html, () => vistaPrevia('tel')];
 };
 
 R.transferirIban = async (p, qs) => {
-  const cuentas = (await GET('/api/cuentas')).filter(c => c.estado === 'ACTIVA');
+  const cuentas = (await GET('/api/cuentas')).filter(c => c.estado === 'ACTIVA' && c.estado_cliente === 'ACTIVO');
   const pre = qs.get('origen') || estado.transferencia?.origen;
   const html = shell('transferir', cr(['Transferir']), title('Transferir', 'El dinero sale y entra en un mismo paso. Si algo falla, no se mueve nada.') + transferTabs('iban') + `
     <div class="cols c2">
@@ -658,7 +671,9 @@ function vistaPrevia(tipo) {
   const lim = v => tipo === 'tel' ? v.replace(/\D/g, '').slice(0, 8) : v.replace(/\s/g, '').toUpperCase().slice(0, 22);
   const completo = v => tipo === 'tel' ? v.length === 8 : v.length === 22;
   const buscar = v => GET(`/api/buscar/${tipo === 'tel' ? 'telefono' : 'iban'}/${v}`);
-  const etiqueta = (x, v) => tipo === 'tel' ? [tel(v), x ? esc(first(x.titular)) : '—'] : [sh(v), x ? `${esc(first(x.titular))} · ${x.moneda}` : '—'];
+  // En «Por teléfono» el origen es un IBAN cuando el cliente eligió su cuenta, o un número (administración)
+  const esNum = v => /^\d{8}$/.test(v);
+  const etiqueta = (x, v) => tipo === 'tel' && esNum(v) ? [tel(v), x ? esc(first(x.titular)) : '—'] : [sh(v), x ? `${esc(first(x.titular))}${tipo === 'tel' ? '' : ' · ' + x.moneda}` : '—'];
   const pintar = () => {
     const o = $('#o').value, d = lim($('#d').value), m = +$('#m').value;
     const mon = (tipo === 'tel' ? 'CRC' : O?.moneda) || 'CRC';
@@ -673,15 +688,15 @@ function vistaPrevia(tipo) {
     const cO = tipo === 'tel' ? O?.iban : O?.iban, cD = D?.iban;
     const listos = O && D && (tipo === 'iban' || D.afiliado === 'SI');
     const checks = tipo === 'tel'
-      ? [['Los dos números están afiliados', listos && O.afiliado === 'SI'], ['Las cuentas están activas y en colones', listos && O.estado === 'ACTIVA' && D.estado === 'ACTIVA' && O.moneda === 'CRC' && D.moneda === 'CRC'], ['Son cuentas distintas', listos && cO !== cD]]
+      ? [[esNum(o) ? 'Los dos números están afiliados' : 'El número de destino está afiliado', listos && (!esNum(o) || O.afiliado === 'SI')], ['Las cuentas están activas y en colones', listos && O.estado === 'ACTIVA' && D.estado === 'ACTIVA' && O.moneda === 'CRC' && D.moneda === 'CRC'], ['Son cuentas distintas', listos && cO !== cD]]
       : [['Las dos cuentas están activas', listos && O.estado === 'ACTIVA' && D.estado === 'ACTIVA'], [`Las dos son en ${mon === 'USD' ? 'dólares' : 'colones'}`, listos && O.moneda === D.moneda], ['Son cuentas distintas', listos && cO !== cD]];
     checks.push([m > 0 && O ? (O.saldo >= m ? `Hay saldo suficiente: quedan ${fm(O.saldo - m, O.moneda)}` : `Saldo insuficiente: hay ${fm(O.saldo, O.moneda)}`) : 'El monto es positivo y hay saldo suficiente', m > 0 && O && O.saldo >= m]);
     $('#prev').innerHTML = `<div class="sm ink2 b" style="margin-bottom:14px">Así sale el dinero</div>
       ${pair(o ? etiqueta(O, o) : ['—', 'origen'], d ? etiqueta(D, d) : ['—', 'destino'], m > 0 ? fm(m, mon) : '—', 'lg sub' + (listos ? ' live' : ' mute'))}
       <div class="checks" style="margin-top:20px">${checks.map(([t, ok]) => ck(t, listos && m > 0 && !ok, !(listos && m > 0))).join('')}</div>
-      ${listos && cO === cD && tipo === 'tel' ? `<div style="margin-top:12px">${nota('bad', 'Los dos números están afiliados a la misma cuenta. El procedimiento rechazará la transferencia.')}</div>` : ''}`;
+      ${listos && cO === cD && tipo === 'tel' ? `<div style="margin-top:12px">${nota('bad', esNum(o) ? 'Los dos números están afiliados a la misma cuenta. El procedimiento rechazará la transferencia.' : 'Ese número está afiliado a la misma cuenta de la que sale el dinero. El procedimiento rechazará la transferencia.')}</div>` : ''}`;
   };
-  const cargarO = async () => { const v = $('#o').value; const n = ++sec; O = v ? await buscar(v) : null; if (n === sec) pintar(); };
+  const cargarO = async () => { const v = $('#o').value; const n = ++sec; O = v ? await GET(`/api/buscar/${tipo === 'tel' && esNum(v) ? 'telefono' : 'iban'}/${v}`) : null; if (n === sec) pintar(); };
   const cargarD = async () => { const v = lim($('#d').value); D = completo(v) ? await buscar(v) : null; pintar(); };
   $('#o').onchange = cargarO;
   $('#d').oninput = e => { const v = lim(e.target.value); e.target.value = tipo === 'tel' ? (v.length > 4 ? tel(v) : v) : gi(v); cargarD(); };
@@ -700,7 +715,8 @@ R.confirmar = async () => {
   const t = estado.transferencia;
   if (!t || !t.O || !t.D) { ir('/transferir'); return null; }
   const mon = t.tipo === 'tel' ? 'CRC' : t.O.moneda;
-  const a = t.tipo === 'tel' ? [tel(t.origen), esc(t.O.titular)] : [sh(t.origen), esc(t.O.titular)];
+  const porCuenta = t.tipo === 'tel' && !/^\d{8}$/.test(t.origen);   // cliente: eligió la cuenta, no el número
+  const a = t.tipo === 'tel' && !porCuenta ? [tel(t.origen), esc(t.O.titular)] : [sh(t.origen), esc(t.O.titular)];
   const b = t.tipo === 'tel' ? [tel(t.destino), esc(t.D.titular)] : [sh(t.destino), esc(t.D.titular)];
   const html = shell('transferir', cr(['Transferir', t.tipo === 'tel' ? '/transferir' : '/transferir/iban'], ['Confirmar']), `
     <div style="width:min(680px,100%);margin:12px auto 0" class="stack">
@@ -715,7 +731,7 @@ R.confirmar = async () => {
       </div><div class="mf"><a class="btn" href="#${t.tipo === 'tel' ? '/transferir' : '/transferir/iban'}">Volver</a><button class="btn pri" id="ok">Transferir ${fm(t.monto, mon)}</button></div></div>
     </div>`);
   return [html, () => $('#ok').onclick = () => accion($('#ok'), async () => {
-    const cuerpo = {origen: t.origen, destino: t.destino, monto: t.monto, detalle: t.detalle};
+    const cuerpo = {[porCuenta ? 'cuenta' : 'origen']: t.origen, destino: t.destino, monto: t.monto, detalle: t.detalle};
     try { estado.resultado = {ok: true, t: await POST(`/api/transferencias/${t.tipo === 'tel' ? 'sinpe' : 'iban'}`, cuerpo), pedido: t}; }
     catch (e) { estado.resultado = {ok: false, error: e.message, codigo: e.codigo, pedido: t}; }
     estado.transferencia = null;
@@ -741,8 +757,8 @@ R.resultado = async () => {
           <div class="kv"><span>Fecha</span><span class="num">${fdh(t.fecha)}</span></div>
           <div class="kv"><span>Detalle</span><span>${esc(t.detalle) || '<span class="ink3">—</span>'}</span></div>
           <div class="kv"><span>Saldo de ${esc(first(t.titular_origen))}</span><b class="num">${fm(t.saldo_origen_despues, t.moneda)}</b></div>
-          <div class="kv"><span>Saldo de ${esc(first(t.titular_destino))}</span><span class="num">${fm(t.saldo_destino_despues, t.moneda)}</span></div>
-        </div><div class="mf"><a class="btn" href="#/movimientos?iban=${t.iban_origen}">Ver movimientos</a><a class="btn pri" href="#/transferir${t.tipo === 'SINPE' ? '' : '/iban'}">Nueva transferencia</a></div></div>
+          ${esAdmin() ? `<div class="kv"><span>Saldo de ${esc(first(t.titular_destino))}</span><span class="num">${fm(t.saldo_destino_despues, t.moneda)}</span></div>` : ''}
+        </div><div class="mf"><button class="btn" onclick="window.print()">${ic('dl')}Imprimir o guardar PDF</button><a class="btn" href="#/movimientos?iban=${t.iban_origen}">Ver movimientos</a><a class="btn pri" href="#/transferir${t.tipo === 'SINPE' ? '' : '/iban'}">Nueva transferencia</a></div></div>
       </div>`);
   }
   const misma = /misma cuenta|sí misma/i.test(r.error);
@@ -769,6 +785,7 @@ R.resultadoMontar = () => { const b = $('#reint'); if (b) b.onclick = () => { co
 /* ---------- movimientos e informes ---------- */
 R.movimientos = async (p, qs) => {
   const cuentas = await GET('/api/cuentas');
+  if (!cuentas.length) return shell('movimientos', cr(['Movimientos']), title('Movimientos') + vacio('No hay cuentas para consultar.'));
   const iban = qs.get('iban') || cuentas.find(c => c.estado === 'ACTIVA' && c.moneda === 'CRC')?.iban || cuentas[0]?.iban;
   const desde = qs.get('desde') || inicioMes(), hasta = qs.get('hasta') || hoyISO();
   const c = cuentas.find(x => x.iban === iban);
@@ -785,8 +802,8 @@ R.movimientos = async (p, qs) => {
     ${err ? nota('bad', esc(err)) : `
     <div class="figs">
       <div class="fig"><div class="k">Saldo al ${fd(desde)}</div><div class="v num">${fm(mv.totales.saldo_inicial, m)}</div></div>
-      <div class="fig"><div class="k">Enviado</div><div class="v num">−${fm(mv.totales.total_enviado, m)}</div><div class="n">${plural(mv.totales.cantidad_enviadas, 'transferencia', 'transferencias')}</div></div>
-      <div class="fig"><div class="k">Recibido</div><div class="v num pos">+${fm(mv.totales.total_recibido, m)}</div><div class="n">${plural(mv.totales.cantidad_recibidas, 'transferencia', 'transferencias')}</div></div>
+      <div class="fig"><div class="k">Enviado</div><div class="v num">${mv.totales.total_enviado ? '−' : ''}${fm(mv.totales.total_enviado, m)}</div><div class="n">${plural(mv.totales.cantidad_enviadas, 'transferencia', 'transferencias')}</div></div>
+      <div class="fig"><div class="k">Recibido</div><div class="v num${mv.totales.total_recibido ? ' pos' : ''}">${mv.totales.total_recibido ? '+' : ''}${fm(mv.totales.total_recibido, m)}</div><div class="n">${plural(mv.totales.cantidad_recibidas, 'transferencia', 'transferencias')}</div></div>
       <div class="fig"><div class="k">Saldo al ${fd(hasta)}</div><div class="big num">${fm(mv.totales.saldo_final, m)}</div></div>
     </div>
     <div class="block">${mv.movimientos.length ? `<table>
@@ -797,10 +814,10 @@ R.movimientos = async (p, qs) => {
     </table>` : vacio('La cuenta no tuvo movimientos en este período.')}</div>
     ${cons ? `<div class="block"><div class="bh"><h2>El dinero no se crea ni se pierde</h2><div class="act">${cons.monedas.map(x => `<span class="st ${x.conservacion === 'SE CONSERVA' ? 'ok' : 'bad'}">${x.moneda}: ${fm(x.total_inicial, x.moneda)} antes y ${fm(x.total_final, x.moneda)} después</span>`).join(' ')}</div></div>
       ${cons.cuentas.length ? `<table>
-      <thead><tr><th>Cuenta</th><th>Titular</th><th class="r">Saldo inicial</th><th class="r">Enviado</th><th class="r">Recibido</th><th class="r">Saldo final</th><th>Verificación</th></tr></thead>
-      <tbody>${cons.cuentas.map(x => `<tr><td class="num">${gi(x.iban)}</td><td><div class="who">${av(x.titular)}${esc(x.titular)}</div></td><td class="r num">${fm(x.saldo_inicial, x.moneda)}</td><td class="r num">${fm(x.enviado, x.moneda)}</td><td class="r num">${fm(x.recibido, x.moneda)}</td><td class="r b num">${fm(x.saldo_final, x.moneda)}</td><td>${x.verificacion === 'CUADRA' ? '<span class="st ok">Cuadra</span>' : '<span class="st bad">No cuadra</span>'}</td></tr>`).join('')}</tbody>
-      <tfoot>${cons.monedas.map(x => `<tr><td>Total ${x.moneda}</td><td class="sm ink2" style="font-weight:500">${plural(x.cuentas, 'cuenta participante', 'cuentas participantes')}</td><td class="r num">${fm(x.total_inicial, x.moneda)}</td><td class="r num">${fm(x.total_enviado, x.moneda)}</td><td class="r num">${fm(x.total_recibido, x.moneda)}</td><td class="r num">${fm(x.total_final, x.moneda)}</td><td>${x.conservacion === 'SE CONSERVA' ? '<span class="st ok">Se conserva</span>' : '<span class="st bad">No se conserva</span>'}</td></tr>`).join('')}</tfoot>
-    </table>` : vacio('Ninguna cuenta tuvo transferencias en este período.')}</div>` : ''}`}`);
+      <thead><tr><th>Cuenta</th><th>Titular</th><th class="r">Saldo inicial</th><th class="r">Enviado</th><th class="r">Recibido</th><th class="r">Saldo final</th><th class="r">En la cuenta</th><th>Verificación</th></tr></thead>
+      <tbody>${cons.cuentas.map(x => `<tr><td class="num">${sh(x.iban)}</td><td>${esc(first(x.titular))}</td><td class="r num">${fm(x.saldo_inicial, x.moneda)}</td><td class="r num">${fm(x.enviado, x.moneda)}</td><td class="r num">${fm(x.recibido, x.moneda)}</td><td class="r b num">${fm(x.saldo_final, x.moneda)}</td><td class="r num${x.saldo_final !== x.saldo_registrado ? ' negc b' : ''}">${fm(x.saldo_registrado, x.moneda)}</td><td>${x.verificacion === 'CUADRA' ? '<span class="st ok">Cuadra</span>' : '<span class="st bad">No cuadra</span>'}</td></tr>`).join('')}</tbody>
+      <tfoot>${cons.monedas.map(x => `<tr><td>Total ${x.moneda}</td><td class="sm ink2" style="font-weight:500">${plural(x.cuentas, 'cuenta participante', 'cuentas participantes')}</td><td class="r num">${fm(x.total_inicial, x.moneda)}</td><td class="r num">${fm(x.total_enviado, x.moneda)}</td><td class="r num">${fm(x.total_recibido, x.moneda)}</td><td class="r num">${fm(x.total_final, x.moneda)}</td><td class="r num">${fm(x.total_registrado, x.moneda)}</td><td>${x.conservacion === 'SE CONSERVA' ? '<span class="st ok">Se conserva</span>' : '<span class="st bad">No se conserva</span>'}</td></tr>`).join('')}</tfoot>
+    </table><div class="bb" style="padding-top:12px">${nota('', 'Los saldos inicial y final salen de la evidencia que guardó cada transferencia, no del saldo actual. <b>En la cuenta</b> es lo que dice hoy la tabla de cuentas. Si alguien cambia un saldo fuera de una transferencia, esa cuenta deja de cuadrar.')}</div>` : vacio('Ninguna cuenta tuvo transferencias en este período.')}</div>` : ''}`}`);
   return [html, () => {
     $('#f').onsubmit = e => { e.preventDefault(); ir(`/movimientos?iban=${$('#c').value}&desde=${$('#de').value}&hasta=${$('#ha').value}`); };
     $('#csv') && ($('#csv').onclick = () => descargarCSV(`movimientos-${iban}-${desde}-${hasta}.csv`,
@@ -817,7 +834,7 @@ function modalEntidad(e) {
       <div class="s2" id="err"></div><button type="submit" hidden></button></form>`,
     `<button class="btn" data-cerrar>Cancelar</button><button class="btn pri" id="ok">Guardar</button>`,
     () => { const enviar = () => accion($('#ok'), async () => {
-      if (e) await PUT('/api/entidades/' + e.id_entidad, {nombre: $('#en').value});
+      if (e) await PUT('/api/entidades/' + e.codigo, {nombre: $('#en').value});
       else await POST('/api/entidades', {codigo: $('#ec').value, nombre: $('#en').value});
       cerrarCapa(); aviso('Entidad guardada.'); render();
     }, $('#err')); $('#ok').onclick = enviar; $('#fe').onsubmit = ev => { ev.preventDefault(); enviar(); }; });

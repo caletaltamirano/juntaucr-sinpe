@@ -28,7 +28,10 @@ const soloDigitos = s => String(s ?? '').replace(/\D/g, '');
 const ibanLimpio = s => String(s ?? '').replace(/\s/g, '').toUpperCase();
 const q = async (sql, params = []) => (await pool.query(sql, params))[0];
 // CALL devuelve [resultado1, resultado2, ..., OkPacket]; nos quedamos con los conjuntos de filas
-const call = async (sql, params = []) => (await pool.query(sql, params))[0].filter(Array.isArray);
+const call = async (sql, params = []) => {
+  const r = (await pool.query(sql, params))[0];
+  return Array.isArray(r) ? r.filter(Array.isArray) : [];   // un CALL sin filas devuelve solo el OkPacket
+};
 
 // Ejecuta un procedimiento con parámetro OUT en una conexión propia
 async function callOut(sql, params) {
@@ -114,6 +117,17 @@ async function exigirTelefonoPropio(req, numero) {
   if (!r) throw prohibido('Ese teléfono no es suyo o está afiliado en otra entidad.');
 }
 
+// Un cliente no ve el saldo de la otra parte en una transferencia (solo el de sus propias cuentas)
+async function ocultarSaldosAjenos(req, filas) {
+  if (!esCliente(req)) return filas;
+  const mias = new Set((await q('SELECT iban FROM v_cuentas WHERE id_cliente = ?', [req.usuario.id_cliente])).map(r => r.iban));
+  for (const t of filas) {
+    if (!mias.has(t.iban_origen)) delete t.saldo_origen_despues;
+    if (!mias.has(t.iban_destino)) delete t.saldo_destino_despues;
+  }
+  return filas;
+}
+
 // ---------- inicio ----------
 app.get('/api/resumen', soloAdmin, h(async (req, res) => {
   const [c] = await q(`SELECT COUNT(*) total, SUM(estado='ACTIVO') activos FROM cliente`);
@@ -138,16 +152,11 @@ app.get('/api/catalogos', soloAdmin, h(async (req, res) => {
   res.json({ entidades, monedas });
 }));
 app.post('/api/entidades', soloAdmin, h(async (req, res) => {
-  const { codigo, nombre } = req.body;
-  if (!/^\d{4}$/.test(codigo || '')) return res.status(422).json({ error: 'El código de entidad debe tener 4 dígitos.' });
-  if (!String(nombre || '').trim()) return res.status(422).json({ error: 'El nombre es obligatorio.' });
-  await q('INSERT INTO entidad_financiera (codigo, nombre) VALUES (?, ?)', [codigo, nombre.trim()]);
+  await call('CALL sp_registrar_entidad(?, ?)', [req.body.codigo, req.body.nombre]);
   res.json({ ok: true });
 }));
-app.put('/api/entidades/:id', soloAdmin, h(async (req, res) => {
-  const { nombre } = req.body;
-  if (!String(nombre || '').trim()) return res.status(422).json({ error: 'El nombre es obligatorio.' });
-  await q('UPDATE entidad_financiera SET nombre = ? WHERE id_entidad = ?', [nombre.trim(), req.params.id]);
+app.put('/api/entidades/:codigo', soloAdmin, h(async (req, res) => {
+  await call('CALL sp_renombrar_entidad(?, ?)', [req.params.codigo, req.body.nombre]);
   res.json({ ok: true });
 }));
 
@@ -173,12 +182,10 @@ app.get('/api/clientes/:id', soloAdmin, h(async (req, res) => {
   res.json({ cliente, cuentas, telefonos });
 }));
 app.put('/api/clientes/:id', soloAdmin, h(async (req, res) => {
+  const [c] = await q('SELECT identificacion FROM cliente WHERE id_cliente = ?', [req.params.id]);
+  if (!c) return res.status(404).json({ error: 'El cliente no existe.' });
   const { nombre, correo, estado } = req.body;
-  if (!String(nombre || '').trim()) return res.status(422).json({ error: 'El nombre es obligatorio.' });
-  if (!/^\S+@\S+\.\S+$/.test(correo || '')) return res.status(422).json({ error: 'El correo electrónico no es válido.' });
-  if (!['ACTIVO', 'INACTIVO'].includes(estado)) return res.status(422).json({ error: 'Estado no válido.' });
-  await q('UPDATE cliente SET nombre_completo = ?, correo = ?, estado = ? WHERE id_cliente = ?',
-    [nombre.trim(), correo.trim().toLowerCase(), estado, req.params.id]);
+  await call('CALL sp_actualizar_cliente(?, ?, ?, ?)', [c.identificacion, nombre, correo, estado]);
   res.json({ ok: true });
 }));
 
@@ -198,8 +205,8 @@ app.get('/api/cuentas/:iban', h(async (req, res) => {
   const [cuenta] = await q('SELECT * FROM v_cuentas WHERE iban = ?', [iban]);
   if (!cuenta) return res.status(404).json({ error: 'La cuenta no existe.' });
   const [telefonos] = await call('CALL sp_telefonos_por_cuenta(?)', [iban]);
-  const movimientos = await q(`SELECT * FROM v_transferencias WHERE iban_origen = ? OR iban_destino = ? ORDER BY fecha DESC, id_transferencia DESC LIMIT 8`, [iban, iban]);
-  const [mes] = await call('CALL sp_totales_periodo(?, ?, CURDATE())', [iban, new Date().toISOString().slice(0, 8) + '01']);
+  const movimientos = await ocultarSaldosAjenos(req, await q(`SELECT * FROM v_transferencias WHERE iban_origen = ? OR iban_destino = ? ORDER BY fecha DESC, id_transferencia DESC LIMIT 8`, [iban, iban]));
+  const [mes] = await call("CALL sp_totales_periodo(?, DATE_FORMAT(CURDATE(), '%Y-%m-01'), CURDATE())", [iban]);
   res.json({ cuenta, telefonos, movimientos, mes: mes[0] });
 }));
 app.put('/api/cuentas/:iban/estado', soloAdmin, h(async (req, res) => {
@@ -271,27 +278,30 @@ app.get('/api/buscar/iban/:iban', h(async (req, res) => {
 // ---------- transferencias ----------
 app.post('/api/transferencias/sinpe', h(async (req, res) => {
   const b = req.body;
-  await exigirTelefonoPropio(req, b.origen);
-  const id = await callOut('CALL sp_transferir_sinpe(?, ?, ?, ?, @out)', [soloDigitos(b.origen), soloDigitos(b.destino), b.monto, b.detalle || null]);
-  const [t] = await q('SELECT * FROM v_transferencias WHERE id_transferencia = ?', [id]);
+  // Con «cuenta»: el cliente elige cualquiera de sus cuentas (SINPE Móvil real); el procedimiento
+  // resuelve su número afiliado. Con «origen»: se debita la cuenta afiliada a ese teléfono (enunciado 2.8).
+  if (b.cuenta) await exigirCuentaPropia(req, b.cuenta); else await exigirTelefonoPropio(req, b.origen);
+  const id = await callOut('CALL sp_transferir_sinpe(?, ?, ?, ?, ?, @out)',
+    [b.cuenta ? null : soloDigitos(b.origen), b.cuenta ? ibanLimpio(b.cuenta) : null, soloDigitos(b.destino), b.monto, b.detalle || null]);
+  const [t] = await ocultarSaldosAjenos(req, await q('SELECT * FROM v_transferencias WHERE id_transferencia = ?', [id]));
   res.json(t);
 }));
 app.post('/api/transferencias/iban', h(async (req, res) => {
   const b = req.body;
   await exigirCuentaPropia(req, b.origen);
   const id = await callOut('CALL sp_transferir_iban(?, ?, ?, ?, @out)', [ibanLimpio(b.origen), ibanLimpio(b.destino), b.monto, b.detalle || null]);
-  const [t] = await q('SELECT * FROM v_transferencias WHERE id_transferencia = ?', [id]);
+  const [t] = await ocultarSaldosAjenos(req, await q('SELECT * FROM v_transferencias WHERE id_transferencia = ?', [id]));
   res.json(t);
 }));
 
 // Últimas transferencias de las cuentas del cliente en su entidad (inicio del cliente)
 app.get('/api/mis-movimientos', h(async (req, res) => {
   if (!esCliente(req)) throw prohibido('Solo disponible para clientes.');
-  res.json(await q(`SELECT t.* FROM v_transferencias t
+  res.json(await ocultarSaldosAjenos(req, await q(`SELECT t.* FROM v_transferencias t
      WHERE t.iban_origen  IN (SELECT iban FROM v_cuentas WHERE id_cliente = ? AND codigo_entidad = ?)
         OR t.iban_destino IN (SELECT iban FROM v_cuentas WHERE id_cliente = ? AND codigo_entidad = ?)
      ORDER BY t.fecha DESC, t.id_transferencia DESC LIMIT 8`,
-    [req.usuario.id_cliente, req.usuario.codigo_entidad, req.usuario.id_cliente, req.usuario.codigo_entidad]));
+    [req.usuario.id_cliente, req.usuario.codigo_entidad, req.usuario.id_cliente, req.usuario.codigo_entidad])));
 }));
 
 // ---------- movimientos e informes ----------

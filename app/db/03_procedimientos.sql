@@ -166,15 +166,25 @@ BEGIN
   DECLARE v_estado_cli VARCHAR(10);
   DECLARE v_msg        VARCHAR(128);
 
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
   -- se aceptan "8888-1111" u "8888 1111"; se guarda solo el número
   SET p_numero = REPLACE(REPLACE(TRIM(p_numero), '-', ''), ' ', '');
+
+  START TRANSACTION;
 
   IF p_numero IS NULL OR p_numero NOT REGEXP '^[0-9]{8}$' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El número celular debe tener exactamente 8 dígitos.';
   END IF;
 
+  -- FOR SHARE: el titular no puede inactivarse mientras se registra el teléfono
   SELECT id_cliente, estado INTO v_id_cliente, v_estado_cli
-    FROM cliente WHERE identificacion = p_identificacion;
+    FROM cliente WHERE identificacion = p_identificacion
+    FOR SHARE;
   IF v_id_cliente IS NULL THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El titular indicado no existe.';
   END IF;
@@ -189,6 +199,7 @@ BEGIN
 
   INSERT INTO telefono (numero, id_cliente) VALUES (p_numero, v_id_cliente);
   SET p_id_telefono = LAST_INSERT_ID();
+  COMMIT;
 END$$
 
 -- ---------------------------------------------------------------------
@@ -245,6 +256,9 @@ BEGIN
   END IF;
   IF v_tit_cta <> v_tit_tel THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono y la cuenta deben pertenecer al mismo cliente.';
+  END IF;
+  IF (SELECT estado FROM cliente WHERE id_cliente = v_tit_tel) <> 'ACTIVO' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El cliente está inactivo: no puede afiliar teléfonos.';
   END IF;
   IF v_estado <> 'ACTIVA' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede afiliar a una cuenta ACTIVA.';
@@ -338,7 +352,9 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono no tiene afiliación vigente para trasladar.';
   END IF;
 
-  SELECT id_cuenta INTO v_cta_nueva FROM cuenta WHERE iban = p_iban_nueva;
+  -- FOR SHARE solo bloquea (nadie la desactiva antes del COMMIT); la validación
+  -- de estado y moneda queda en el trigger del paso 2, a propósito.
+  SELECT id_cuenta INTO v_cta_nueva FROM cuenta WHERE iban = p_iban_nueva FOR SHARE;
   IF v_cta_nueva IS NULL THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta de destino no existe.';
   END IF;
@@ -357,11 +373,22 @@ BEGIN
 END$$
 
 -- ---------------------------------------------------------------------
--- sp_transferir_sinpe · Transferir por teléfonos con bloqueos, validación y registro
+-- sp_transferir_sinpe · Transferir por SINPE Móvil con bloqueos, validación y registro
+--
+-- Dos formas de indicar de dónde sale el dinero:
+--   a) p_iban_origen NULL  → como en el enunciado (2.8): se debita la cuenta
+--      afiliada al teléfono de origen.
+--   b) p_iban_origen dado  → como en SINPE Móvil real: el cliente elige
+--      CUALQUIERA de sus cuentas activas en colones y solo escribe el número
+--      de destino. Basta con que tenga un teléfono afiliado (en cualquier
+--      entidad). Si p_tel_origen es NULL se usa su número afiliado (primero el
+--      afiliado a esa misma cuenta); ese número queda como teléfono de origen.
+-- En ambos casos el destino es la cuenta afiliada al teléfono de destino.
 -- ---------------------------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_transferir_sinpe$$
 CREATE PROCEDURE sp_transferir_sinpe(
   IN  p_tel_origen   CHAR(8),
+  IN  p_iban_origen  VARCHAR(40),
   IN  p_tel_destino  CHAR(8),
   IN  p_monto        DECIMAL(18,2),
   IN  p_detalle      VARCHAR(140),
@@ -370,6 +397,7 @@ BEGIN
   DECLARE v_tel_o, v_tel_d       INT UNSIGNED;
   DECLARE v_tit_tel_o, v_tit_tel_d INT UNSIGNED;
   DECLARE v_cta_o, v_cta_d       INT UNSIGNED;
+  DECLARE v_cta_af_o             INT UNSIGNED;
   DECLARE v_tit_cta_o, v_tit_cta_d INT UNSIGNED;
   DECLARE v_est_o, v_est_d       VARCHAR(10);
   DECLARE v_mon_o, v_mon_d       CHAR(3);
@@ -382,8 +410,14 @@ BEGIN
     RESIGNAL;
   END;
 
+  SET p_tel_origen  = NULLIF(TRIM(p_tel_origen), '');
+  SET p_iban_origen = NULLIF(UPPER(REPLACE(TRIM(p_iban_origen), ' ', '')), '');
+
   IF p_monto IS NULL OR p_monto <= 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El monto debe ser mayor que cero.';
+  END IF;
+  IF p_tel_origen IS NULL AND p_iban_origen IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Indique el teléfono o la cuenta de origen.';
   END IF;
   IF p_tel_origen = p_tel_destino THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono de origen y el de destino son el mismo.';
@@ -391,20 +425,44 @@ BEGIN
 
   START TRANSACTION;
 
-  -- 1. Resolver teléfono → afiliación vigente → cuenta.
-  --    FOR SHARE bloquea la afiliación: nadie la puede desafiliar o
-  --    trasladar mientras esta transferencia esté en curso.
-  SELECT t.id_telefono, t.id_cliente, a.id_cuenta
-    INTO v_tel_o, v_tit_tel_o, v_cta_o
-    FROM telefono t LEFT JOIN afiliacion_sinpe a ON a.id_telefono = t.id_telefono
-   WHERE t.numero = p_tel_origen FOR SHARE;
-  IF v_tel_o IS NULL THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono de origen no está registrado.';
-  END IF;
-  IF v_cta_o IS NULL THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono de origen no está afiliado a SINPE Móvil.';
+  -- 1. Origen. FOR SHARE bloquea la afiliación del número de origen: nadie la
+  --    puede desafiliar o trasladar mientras esta transferencia esté en curso.
+  IF p_iban_origen IS NOT NULL THEN
+    SELECT id_cuenta, id_cliente INTO v_cta_o, v_tit_cta_o FROM cuenta WHERE iban = p_iban_origen;
+    IF v_cta_o IS NULL THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta de origen no existe.';
+    END IF;
   END IF;
 
+  IF p_tel_origen IS NOT NULL THEN
+    SELECT t.id_telefono, t.id_cliente, a.id_cuenta
+      INTO v_tel_o, v_tit_tel_o, v_cta_af_o
+      FROM telefono t LEFT JOIN afiliacion_sinpe a ON a.id_telefono = t.id_telefono
+     WHERE t.numero = p_tel_origen FOR SHARE;
+    IF v_tel_o IS NULL THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono de origen no está registrado.';
+    END IF;
+  ELSE
+    -- Número afiliado del titular de la cuenta elegida: primero el de esa cuenta y,
+    -- si puede, uno distinto del destino (al enviarse a sí mismo entre cuentas propias).
+    SELECT t.id_telefono, t.id_cliente, a.id_cuenta
+      INTO v_tel_o, v_tit_tel_o, v_cta_af_o
+      FROM telefono t JOIN afiliacion_sinpe a ON a.id_telefono = t.id_telefono
+     WHERE t.id_cliente = v_tit_cta_o
+     ORDER BY (a.id_cuenta = v_cta_o) DESC, (t.numero = p_tel_destino), t.numero
+     LIMIT 1 FOR SHARE;
+  END IF;
+  IF v_cta_af_o IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Para enviar por SINPE Móvil necesita un número afiliado a SINPE Móvil.';
+  END IF;
+
+  IF p_iban_origen IS NULL THEN
+    SET v_cta_o = v_cta_af_o;              -- forma a): la cuenta afiliada al teléfono
+  ELSEIF v_tit_tel_o <> v_tit_cta_o THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono de origen no es del titular de la cuenta de origen.';
+  END IF;
+
+  -- 2. Destino: teléfono → afiliación vigente → cuenta
   SELECT t.id_telefono, t.id_cliente, a.id_cuenta
     INTO v_tel_d, v_tit_tel_d, v_cta_d
     FROM telefono t LEFT JOIN afiliacion_sinpe a ON a.id_telefono = t.id_telefono
@@ -416,12 +474,16 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El teléfono de destino no está afiliado a SINPE Móvil.';
   END IF;
 
-  -- 2. Regla 7: no entre teléfonos afiliados a la misma cuenta.
+  -- 3. Regla 7: el dinero no puede salir y entrar en la misma cuenta.
   IF v_cta_o = v_cta_d THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Los dos teléfonos están afiliados a la misma cuenta: no se puede transferir.';
+    IF p_iban_origen IS NULL THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Los dos teléfonos están afiliados a la misma cuenta: no se puede transferir.';
+    ELSE
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El número de destino está afiliado a la misma cuenta de origen: no se puede transferir.';
+    END IF;
   END IF;
 
-  -- 3. Bloquear las dos cuentas SIEMPRE en el mismo orden (id menor primero)
+  -- 4. Bloquear las dos cuentas SIEMPRE en el mismo orden (id menor primero)
   --    para que dos transferencias cruzadas no produzcan un interbloqueo.
   SELECT 1 INTO v_lock FROM cuenta WHERE id_cuenta = LEAST(v_cta_o, v_cta_d)    FOR UPDATE;
   SELECT 1 INTO v_lock FROM cuenta WHERE id_cuenta = GREATEST(v_cta_o, v_cta_d) FOR UPDATE;
@@ -431,12 +493,15 @@ BEGIN
   SELECT c.id_cliente, c.estado, m.codigo, c.saldo INTO v_tit_cta_d, v_est_d, v_mon_d, v_saldo_d
     FROM cuenta c JOIN moneda m ON m.id_moneda = c.id_moneda WHERE c.id_cuenta = v_cta_d;
 
-  -- 4. Titularidad, vigencia, moneda y saldo
+  -- 5. Titularidad, vigencia, moneda y saldo
   IF v_tit_cta_o <> v_tit_tel_o OR v_tit_cta_d <> v_tit_tel_d THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La titularidad del teléfono no coincide con la de su cuenta afiliada.';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La titularidad del teléfono no coincide con la de su cuenta.';
   END IF;
   IF v_est_o <> 'ACTIVA' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta de origen no está activa.';
+  END IF;
+  IF (SELECT estado FROM cliente WHERE id_cliente = v_tit_cta_o) <> 'ACTIVO' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El titular de la cuenta de origen está inactivo: no puede enviar dinero.';
   END IF;
   IF v_est_d <> 'ACTIVA' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta de destino no está activa.';
@@ -448,7 +513,7 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Saldo insuficiente en la cuenta de origen.';
   END IF;
 
-  -- 5. Debitar, acreditar y registrar (todo o nada)
+  -- 6. Debitar, acreditar y registrar (todo o nada)
   UPDATE cuenta SET saldo = saldo - p_monto WHERE id_cuenta = v_cta_o;
   UPDATE cuenta SET saldo = saldo + p_monto WHERE id_cuenta = v_cta_d;
 
@@ -514,6 +579,9 @@ BEGIN
 
   IF v_est_o <> 'ACTIVA' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta de origen no está activa.';
+  END IF;
+  IF (SELECT cl.estado FROM cuenta c JOIN cliente cl ON cl.id_cliente = c.id_cliente WHERE c.id_cuenta = v_cta_o) <> 'ACTIVO' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El titular de la cuenta de origen está inactivo: no puede enviar dinero.';
   END IF;
   IF v_est_d <> 'ACTIVA' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta de destino no está activa.';
@@ -673,6 +741,9 @@ BEGIN
   IF v_actual = p_estado THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La cuenta ya tiene ese estado.';
   END IF;
+  IF p_estado = 'ACTIVA' AND (SELECT cl.estado FROM cuenta c JOIN cliente cl ON cl.id_cliente = c.id_cliente WHERE c.id_cuenta = v_cta) <> 'ACTIVO' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El titular está inactivo: active primero al cliente para reactivar la cuenta.';
+  END IF;
 
   SELECT COUNT(*) INTO v_af FROM afiliacion_sinpe WHERE id_cuenta = v_cta FOR UPDATE;
   IF p_estado <> 'ACTIVA' AND v_af > 0 THEN
@@ -689,5 +760,124 @@ BEGIN
 
   COMMIT;
 END$$
+
+-- ---------------------------------------------------------------------
+-- sp_actualizar_cliente · Editar nombre, correo y estado (antes era un UPDATE
+--   en server.js). Postura sobre clientes INACTIVOS: conservan sus datos y
+--   pueden recibir dinero, pero no inician operaciones: no ingresan, no envían,
+--   no afilian, no abren cuentas, no registran teléfonos ni reactivan cuentas.
+-- ---------------------------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_actualizar_cliente$$
+CREATE PROCEDURE sp_actualizar_cliente(
+  IN p_identificacion VARCHAR(20),
+  IN p_nombre         VARCHAR(120),
+  IN p_correo         VARCHAR(120),
+  IN p_estado         VARCHAR(10))
+BEGIN
+  DECLARE v_id INT UNSIGNED;
+
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  SET p_nombre = TRIM(p_nombre);
+  SET p_correo = LOWER(TRIM(p_correo));
+  SET p_estado = UPPER(TRIM(p_estado));
+
+  IF p_nombre IS NULL OR CHAR_LENGTH(p_nombre) < 3 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre completo es obligatorio.';
+  END IF;
+  IF p_correo IS NULL OR p_correo NOT LIKE '%_@_%._%' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El correo electrónico no es válido.';
+  END IF;
+  IF p_estado IS NULL OR p_estado NOT IN ('ACTIVO', 'INACTIVO') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El estado del cliente debe ser ACTIVO o INACTIVO.';
+  END IF;
+
+  START TRANSACTION;
+
+  SELECT id_cliente INTO v_id FROM cliente WHERE identificacion = TRIM(p_identificacion) FOR UPDATE;
+  IF v_id IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El cliente indicado no existe.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM cliente WHERE correo = p_correo AND id_cliente <> v_id)
+     OR EXISTS (SELECT 1 FROM usuario WHERE correo = p_correo AND COALESCE(id_cliente, 0) <> v_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe otro usuario con ese correo.';
+  END IF;
+
+  UPDATE cliente SET nombre_completo = p_nombre, correo = p_correo, estado = p_estado WHERE id_cliente = v_id;
+  -- el usuario de ingreso sigue al cliente
+  UPDATE usuario SET correo = p_correo, nombre = p_nombre WHERE id_cliente = v_id;
+
+  COMMIT;
+END$$
+
+-- ---------------------------------------------------------------------
+-- sp_registrar_entidad / sp_renombrar_entidad · Catálogo de entidades
+--   (antes se validaba en server.js)
+-- ---------------------------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_registrar_entidad$$
+CREATE PROCEDURE sp_registrar_entidad(
+  IN p_codigo VARCHAR(10),
+  IN p_nombre VARCHAR(80))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  SET p_codigo = TRIM(p_codigo);
+  SET p_nombre = TRIM(p_nombre);
+  IF p_codigo IS NULL OR p_codigo NOT REGEXP '^[0-9]{4}$' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El código de entidad debe tener 4 dígitos.';
+  END IF;
+  IF p_nombre IS NULL OR p_nombre = '' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre de la entidad es obligatorio.';
+  END IF;
+
+  START TRANSACTION;
+  IF EXISTS (SELECT 1 FROM entidad_financiera WHERE codigo = p_codigo) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una entidad con ese código.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM entidad_financiera WHERE nombre = p_nombre) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una entidad con ese nombre.';
+  END IF;
+  INSERT INTO entidad_financiera (codigo, nombre) VALUES (p_codigo, p_nombre);
+  COMMIT;
+END$$
+
+DROP PROCEDURE IF EXISTS sp_renombrar_entidad$$
+CREATE PROCEDURE sp_renombrar_entidad(
+  IN p_codigo VARCHAR(10),
+  IN p_nombre VARCHAR(80))
+BEGIN
+  DECLARE v_id SMALLINT UNSIGNED;
+
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  SET p_nombre = TRIM(p_nombre);
+  IF p_nombre IS NULL OR p_nombre = '' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre de la entidad es obligatorio.';
+  END IF;
+
+  START TRANSACTION;
+  SELECT id_entidad INTO v_id FROM entidad_financiera WHERE codigo = TRIM(p_codigo) FOR UPDATE;
+  IF v_id IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La entidad indicada no existe.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM entidad_financiera WHERE nombre = p_nombre AND id_entidad <> v_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una entidad con ese nombre.';
+  END IF;
+  UPDATE entidad_financiera SET nombre = p_nombre WHERE id_entidad = v_id;
+  COMMIT;
+END$$
+
 
 DELIMITER ;

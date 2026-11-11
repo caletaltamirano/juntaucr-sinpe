@@ -12,7 +12,8 @@ SELECT c.id_cuenta, c.iban, c.saldo, c.fecha_apertura, c.estado,
        cl.id_cliente, cl.identificacion, cl.nombre_completo AS titular,
        e.codigo AS codigo_entidad, e.nombre AS entidad,
        m.codigo AS moneda, m.simbolo,
-       (SELECT COUNT(*) FROM afiliacion_sinpe a WHERE a.id_cuenta = c.id_cuenta) AS telefonos_afiliados
+       (SELECT COUNT(*) FROM afiliacion_sinpe a WHERE a.id_cuenta = c.id_cuenta) AS telefonos_afiliados,
+       cl.estado AS estado_cliente
   FROM cuenta c
   JOIN cliente cl           ON cl.id_cliente = c.id_cliente
   JOIN entidad_financiera e ON e.id_entidad  = c.id_entidad
@@ -140,9 +141,18 @@ END$$
 
 -- ---------------------------------------------------------------------
 -- 5.6 Saldos de las cuentas participantes y conservación del total
---     Resultado 1: por cuenta, saldo inicial, enviado, recibido y final.
---     Resultado 2: por moneda, suma inicial vs. suma final (deben ser iguales:
---                  las transferencias internas no crean ni destruyen dinero).
+--     Los saldos NO se reconstruyen desde el saldo actual (eso cuadraría
+--     siempre, por construcción). Se toman de la evidencia que cada
+--     transferencia guardó (saldo_origen_despues / saldo_destino_despues):
+--       saldo_inicial    = saldo antes de la primera transferencia del período
+--       saldo_final      = saldo después de la última transferencia del período
+--       saldo_registrado = saldo actual de la cuenta menos lo movido después
+--                          del período (lo que dice la tabla cuenta hoy)
+--     CUADRA si inicial − enviado + recibido = final  (la evidencia es coherente)
+--            y final = registrado                     (nadie tocó el saldo fuera
+--                                                      de una transferencia).
+--     Resultado 1: por cuenta. Resultado 2: por moneda; SE CONSERVA si la suma
+--     inicial es igual a la final y todas las cuentas cuadran.
 -- ---------------------------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_comprobar_conservacion$$
 CREATE PROCEDURE sp_comprobar_conservacion(
@@ -156,20 +166,26 @@ BEGIN
   DROP TEMPORARY TABLE IF EXISTS tmp_conservacion;
   CREATE TEMPORARY TABLE tmp_conservacion AS
   SELECT c.id_cuenta, c.iban, cl.nombre_completo AS titular, m.codigo AS moneda,
-         c.saldo
-           - COALESCE((SELECT SUM(IF(t.id_cuenta_destino = c.id_cuenta, t.monto, -t.monto)) FROM transferencia t
-                        WHERE (t.id_cuenta_origen = c.id_cuenta OR t.id_cuenta_destino = c.id_cuenta)
-                          AND t.fecha >= p_desde), 0) AS saldo_inicial,
+         (SELECT IF(t.id_cuenta_destino = c.id_cuenta, t.saldo_destino_despues - t.monto, t.saldo_origen_despues + t.monto)
+            FROM transferencia t
+           WHERE (t.id_cuenta_origen = c.id_cuenta OR t.id_cuenta_destino = c.id_cuenta)
+             AND t.fecha >= p_desde AND t.fecha < p_hasta + INTERVAL 1 DAY
+           ORDER BY t.fecha, t.id_transferencia LIMIT 1) AS saldo_inicial,
          COALESCE((SELECT SUM(t.monto) FROM transferencia t
                     WHERE t.id_cuenta_origen = c.id_cuenta
                       AND t.fecha >= p_desde AND t.fecha < p_hasta + INTERVAL 1 DAY), 0) AS enviado,
          COALESCE((SELECT SUM(t.monto) FROM transferencia t
                     WHERE t.id_cuenta_destino = c.id_cuenta
                       AND t.fecha >= p_desde AND t.fecha < p_hasta + INTERVAL 1 DAY), 0) AS recibido,
+         (SELECT IF(t.id_cuenta_destino = c.id_cuenta, t.saldo_destino_despues, t.saldo_origen_despues)
+            FROM transferencia t
+           WHERE (t.id_cuenta_origen = c.id_cuenta OR t.id_cuenta_destino = c.id_cuenta)
+             AND t.fecha >= p_desde AND t.fecha < p_hasta + INTERVAL 1 DAY
+           ORDER BY t.fecha DESC, t.id_transferencia DESC LIMIT 1) AS saldo_final,
          c.saldo
            - COALESCE((SELECT SUM(IF(t.id_cuenta_destino = c.id_cuenta, t.monto, -t.monto)) FROM transferencia t
                         WHERE (t.id_cuenta_origen = c.id_cuenta OR t.id_cuenta_destino = c.id_cuenta)
-                          AND t.fecha >= p_hasta + INTERVAL 1 DAY), 0) AS saldo_final
+                          AND t.fecha >= p_hasta + INTERVAL 1 DAY), 0) AS saldo_registrado
     FROM cuenta c
     JOIN cliente cl ON cl.id_cliente = c.id_cliente
     JOIN moneda m   ON m.id_moneda   = c.id_moneda
@@ -177,8 +193,9 @@ BEGIN
                   WHERE (t.id_cuenta_origen = c.id_cuenta OR t.id_cuenta_destino = c.id_cuenta)
                     AND t.fecha >= p_desde AND t.fecha < p_hasta + INTERVAL 1 DAY);
 
-  SELECT iban, titular, moneda, saldo_inicial, enviado, recibido, saldo_final,
-         IF(saldo_inicial - enviado + recibido = saldo_final, 'CUADRA', 'NO CUADRA') AS verificacion
+  SELECT iban, titular, moneda, saldo_inicial, enviado, recibido, saldo_final, saldo_registrado,
+         IF(saldo_inicial - enviado + recibido = saldo_final AND saldo_final = saldo_registrado,
+            'CUADRA', 'NO CUADRA') AS verificacion
     FROM tmp_conservacion
    ORDER BY moneda, iban;
 
@@ -188,9 +205,18 @@ BEGIN
          SUM(enviado)       AS total_enviado,
          SUM(recibido)      AS total_recibido,
          SUM(saldo_final)   AS total_final,
-         IF(SUM(saldo_inicial) = SUM(saldo_final), 'SE CONSERVA', 'NO SE CONSERVA') AS conservacion
+         SUM(saldo_registrado) AS total_registrado,
+         IF(SUM(saldo_inicial) = SUM(saldo_final)
+            AND SUM(saldo_inicial - enviado + recibido <> saldo_final OR saldo_final <> saldo_registrado) = 0,
+            'SE CONSERVA', 'NO SE CONSERVA') AS conservacion
     FROM tmp_conservacion
    GROUP BY moneda;
+
+  -- resumen en una variable de sesión, para poder afirmarlo en 06_pruebas.sql
+  SELECT IF(COUNT(*) = 0 OR SUM(saldo_inicial - enviado + recibido <> saldo_final OR saldo_final <> saldo_registrado) = 0,
+            'SE CONSERVA', 'NO SE CONSERVA')
+    INTO @conservacion
+    FROM tmp_conservacion;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_conservacion;
 END$$
